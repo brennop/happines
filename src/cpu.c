@@ -26,6 +26,12 @@ const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
   case x + 0xC0:                                                               \
   case x + 0xE0
 
+#define VERT_4(x)                                                              \
+  x:                                                                           \
+  case x + 0x20:                                                               \
+  case x + 0x40:                                                               \
+  case x + 0x60
+
 #define CHECK_PAGE_CROSSING(addr1, addr2)                                      \
   if ((addr1 & 0xFF00) != (addr2 & 0xFF00)) {                                  \
     cycles++;                                                                  \
@@ -153,14 +159,29 @@ void cpu_step(CPU *cpu) {
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
     break;
-  case VERT_8(0x10): // BIT
-    if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) == ((opcode >> 5) & 0x01)) {
+  case VERT_8(0x10): // Branches
+    if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
+        ((opcode >> 5) & 0x01)) {
       cycles++;
       addr = cpu->pc + addr;
       // TODO: sum instead of branch
       CHECK_PAGE_CROSSING(addr, cpu->pc);
       cpu->pc = addr;
     }
+    break;
+  case VERT_4(0x18):
+    /**          flag mask value
+     * CLC 0x18   C   0x01  0
+     * SEC 0x38   C   0x01  1
+     * CLI 0x58   I   0x04  0
+     * SEI 0x78   I   0x04  1
+     * mask = 2 ** (opcode >> 6) * 2
+     * value = bit 5 of opcode
+     */
+    cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20);
+    break;
+  case 0xB8: // CLV
+    cpu_set_flag(cpu, FLAG_OVERFLOW, false);
     break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
