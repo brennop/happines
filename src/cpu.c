@@ -170,6 +170,8 @@ void cpu_step(CPU *cpu) {
     operation_cycles = 1;
     break;
   case CASE8_4(0x61): operation_cycles = adc(cpu, data); break;
+  // FIXME: f1 takes too long
+  case CASE8_4(0xE1): operation_cycles = adc(cpu, ~data); break;
   case VERT_8(0x10): // Branches
     if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
         ((opcode >> 5) & 0x01)) {
