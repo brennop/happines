@@ -53,6 +53,16 @@ static inline void cpu_set_flag(CPU *cpu, uint8_t mask, bool value) {
   }
 }
 
+static inline uint8_t adc(CPU *cpu, uint8_t data) {
+  uint16_t result = cpu->a + data + (cpu->status & FLAG_CARRY);
+  cpu_set_flag(cpu, FLAG_CARRY, result > 0xFF);
+  cpu_set_flag(cpu, FLAG_ZERO, (result & 0x00FF) == 0);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
+  cpu_set_flag(cpu, FLAG_OVERFLOW, (~(cpu->a ^ data) & (cpu->a ^ result)) & 0x80);
+  cpu->a = result & 0x00FF;
+  return 1;
+}
+
 void cpu_init(CPU *cpu, Bus *bus) { cpu->bus = bus; }
 
 void cpu_step(CPU *cpu) {
@@ -159,6 +169,7 @@ void cpu_step(CPU *cpu) {
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
     break;
+  case CASE8_4(0x61): operation_cycles = adc(cpu, data); break;
   case VERT_8(0x10): // Branches
     if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
         ((opcode >> 5) & 0x01)) {
