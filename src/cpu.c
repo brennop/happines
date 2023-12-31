@@ -4,15 +4,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
+
 #define CASE8_4(x)                                                             \
-  case x:                                                                      \
+  x:                                                                           \
   case x + 4:                                                                  \
   case x + 8:                                                                  \
   case x + 12:                                                                 \
   case x + 16:                                                                 \
   case x + 20:                                                                 \
   case x + 24:                                                                 \
-  case x + 28:
+  case x + 28
+
+#define VERT_8(x)                                                              \
+  x:                                                                           \
+  case x + 0x20:                                                               \
+  case x + 0x40:                                                               \
+  case x + 0x60:                                                               \
+  case x + 0x80:                                                               \
+  case x + 0xA0:                                                               \
+  case x + 0xC0:                                                               \
+  case x + 0xE0
+
+#define CHECK_PAGE_CROSSING(addr1, addr2)                                      \
+  if ((addr1 & 0xFF00) != (addr2 & 0xFF00)) {                                  \
+    cycles++;                                                                  \
+  }
 
 void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
   bus_write(cpu->bus, addr, data);
@@ -130,11 +147,20 @@ void cpu_step(CPU *cpu) {
   }
 
   switch (opcode) {
-  CASE8_4(0x21) // AND
+  case CASE8_4(0x21): // AND
     cpu->a &= data;
     cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
+    break;
+  case VERT_8(0x10): // BIT
+    if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) == ((opcode >> 5) & 0x01)) {
+      cycles++;
+      addr = cpu->pc + addr;
+      // TODO: sum instead of branch
+      CHECK_PAGE_CROSSING(addr, cpu->pc);
+      cpu->pc = addr;
+    }
     break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
