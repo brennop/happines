@@ -16,7 +16,7 @@ LIB_DIR = lib
 # Files
 SRC_FILES := $(wildcard $(SRC_DIR)/*.c)
 OBJ_FILES := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC_FILES))
-# SHARED_LIB = $(LIB_DIR)/libhappines.so
+SHARED_LIB = $(LIB_DIR)/libhappines.so
 
 # Targets
 TARGET = $(BIN_DIR)/happines
@@ -58,3 +58,7 @@ shared: $(OBJ_FILES)
 
 # Add ".so" to the list of file extensions that make considers intermediate
 .INTERMEDIATE: $(SHARED_LIB)
+
+# Test target using luajit
+test: shared
+	luajit test/test.lua test/tests/$(OPCODE).json

@@ -1,8 +1,23 @@
 #include "cpu.h"
 #include "instructions.h"
 
-static inline void cpu_set_flag(CPU *cpu, uint8_t offset, bool value) {
-  cpu->status |= (value << offset);
+#include <stdio.h>
+#include <stdlib.h>
+
+void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
+  bus_write(cpu->bus, addr, data);
+}
+
+uint8_t cpu_bus_read(CPU *cpu, uint16_t addr, bool readonly) {
+  return bus_read(cpu->bus, addr, readonly);
+}
+
+static inline void cpu_set_flag(CPU *cpu, uint8_t mask, bool value) {
+  if (value) {
+    cpu->status |= mask;
+  } else {
+    cpu->status &= ~mask;
+  }
 }
 
 void cpu_init(CPU *cpu, Bus *bus) { cpu->bus = bus; }
@@ -37,8 +52,8 @@ void cpu_step(CPU *cpu) {
     addr = (bus_read(cpu->bus, cpu->pc++, false) + cpu->y) & 0x00FF;
     break;
   case ADDR_MODE_ABS:
-    addr = bus_read(cpu->bus, cpu->pc++, false) |
-           (bus_read(cpu->bus, cpu->pc++, false) << 8);
+    addr = bus_read(cpu->bus, cpu->pc++, false);
+    addr |= (uint16_t)(bus_read(cpu->bus, cpu->pc++, false) << 8);
     break;
   case ADDR_MODE_ABX: {
     addr = bus_read(cpu->bus, cpu->pc++, false);
@@ -48,6 +63,7 @@ void cpu_step(CPU *cpu) {
 
     if ((addr & 0xFF00) != (addr_abs_hi << 8))
       addressing_cycles++;
+    break;
   }
   case ADDR_MODE_ABY: {
     addr = bus_read(cpu->bus, cpu->pc++, false);
@@ -57,6 +73,7 @@ void cpu_step(CPU *cpu) {
 
     if ((addr & 0xFF00) != (addr_abs_hi << 8))
       addressing_cycles++;
+    break;
   }
   case ADDR_MODE_IND: {
     uint16_t ptr_lo = bus_read(cpu->bus, cpu->pc++, false);
@@ -66,6 +83,7 @@ void cpu_step(CPU *cpu) {
     addr = bus_read_wide(cpu->bus, ptr, false);
 
     // TODO: check for page boundary crossing
+    break;
   }
   case ADDR_MODE_IZX: {
     uint16_t t = bus_read(cpu->bus, cpu->pc++, false);
@@ -75,6 +93,7 @@ void cpu_step(CPU *cpu) {
         cpu->bus, (uint16_t)(t + (uint16_t)cpu->x + 1) & 0x00FF, false);
 
     addr = (hi << 8) | lo;
+    break;
   }
   case ADDR_MODE_IZY: {
     uint16_t t = bus_read(cpu->bus, cpu->pc++, false);
@@ -85,12 +104,14 @@ void cpu_step(CPU *cpu) {
 
     if ((addr & 0xFF00) != (hi << 8))
       addressing_cycles++;
+    break;
   }
   case ADDR_MODE_REL: {
     addr = bus_read(cpu->bus, cpu->pc++, false);
     if (addr & 0x80) {
       addr |= 0xFF00;
     }
+    break;
   }
   }
 
@@ -105,9 +126,14 @@ void cpu_step(CPU *cpu) {
     cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
+    break;
+  default:
+    printf("Unimplemented opcode: %02X\n", opcode);
+    exit(1);
+    break;
   }
 
-  cpu->cycles = cycles + addressing_cycles & operation_cycles;
+  cpu->cycles = cycles + (addressing_cycles & operation_cycles);
 }
 
 void cpu_reset(CPU *cpu);
