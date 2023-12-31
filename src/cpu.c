@@ -4,6 +4,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define CASE8_4(x)                                                             \
+  case x:                                                                      \
+  case x + 4:                                                                  \
+  case x + 8:                                                                  \
+  case x + 12:                                                                 \
+  case x + 16:                                                                 \
+  case x + 20:                                                                 \
+  case x + 24:                                                                 \
+  case x + 28:
+
 void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
   bus_write(cpu->bus, addr, data);
 }
@@ -120,8 +130,7 @@ void cpu_step(CPU *cpu) {
   }
 
   switch (opcode) {
-  // TODO: Use a macro to generate this
-  case 0x21: // AND (Indirect,X)
+  CASE8_4(0x21) // AND
     cpu->a &= data;
     cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
