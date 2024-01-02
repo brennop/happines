@@ -123,6 +123,12 @@ static inline void dec(CPU *cpu, uint8_t *value) {
   cpu_set_flag(cpu, FLAG_ZERO, *value == 0);
 }
 
+static inline void eor(CPU *cpu, uint8_t data) {
+  cpu->a ^= data;
+  cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
+  cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0);
+}
+
 static inline void rti(CPU *cpu) {
   cpu->status = pop(cpu);
   cpu->status &= ~FLAG_BREAK;
@@ -300,6 +306,9 @@ void cpu_step(CPU *cpu) {
     break;
   case 0x88: // DEY
     dec(cpu, &cpu->y);
+    break;
+  case CASE8_4(0x41):
+    eor(cpu, data);
     break;
   case 0x40: // RTI
     rti(cpu);
