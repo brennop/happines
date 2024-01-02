@@ -45,9 +45,9 @@ const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
     cycles++;                                                                  \
   }
 
-#define SET_ZERO_NEGATIVE(value) \
-  cpu_set_flag(cpu, FLAG_ZERO, value == 0x00); \
-  cpu_set_flag(cpu, FLAG_NEGATIVE, value & 0x80); \
+#define SET_ZERO_NEGATIVE(value)                                               \
+  cpu_set_flag(cpu, FLAG_ZERO, value == 0x00);                                 \
+  cpu_set_flag(cpu, FLAG_NEGATIVE, value & 0x80);
 
 void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
   bus_write(cpu->bus, addr, data);
@@ -106,7 +106,7 @@ static inline void brk(CPU *cpu) {
   push(cpu, cpu->pc & 0x00FF);
 
   // push status with break set
-  push(cpu, cpu->status | 0x10);
+  push(cpu, cpu->status | FLAG_BREAK);
 
   cpu_set_flag(cpu, FLAG_INTERRUPT_DISABLE, true);
   cpu->pc = bus_read_wide(cpu->bus, 0xFFFE, false);
@@ -131,6 +131,13 @@ static inline void eor(CPU *cpu, uint8_t data) {
   cpu->a ^= data;
   cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
   cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0);
+}
+
+static inline void lsr(CPU *cpu, uint8_t *ptr) {
+  cpu_set_flag(cpu, FLAG_CARRY, *ptr & 0x1);
+  *ptr >>= 1;
+  cpu_set_flag(cpu, FLAG_NEGATIVE, false);
+  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
 }
 
 static inline void rti(CPU *cpu) {
@@ -337,31 +344,47 @@ void cpu_step(CPU *cpu) {
     push(cpu, cpu->pc & 0x00FF);
     cpu->pc = addr;
     break;
-  case CASE8_4(0xA1):
+  case CASE8_4(0xA1): // LDX
     cpu->a = data;
     SET_ZERO_NEGATIVE(cpu->a);
     break;
-  case CASE5(0xA2):
+  case CASE5(0xA2): // LDA
     cpu->x = data;
     SET_ZERO_NEGATIVE(cpu->x);
     break;
   case 0xA0:
-  case CASE4(0xA4):
+  case CASE4(0xA4): // LDY
     cpu->y = data;
     SET_ZERO_NEGATIVE(cpu->y);
+    break;
+  case CASE5(0x46): // LSR
+    lsr(cpu, ptr);
+    break;
+  case 0xEA: // NOP
+    break;
+  case CASE8_4(0x01): // ORA
+    cpu->a |= data;
+    SET_ZERO_NEGATIVE(cpu->a);
+    operation_cycles = 1;
+    break;
+  case 0x48: // PHA
+    push(cpu, cpu->a);
+    break;
+  case 0x08: // PHP
+    push(cpu, cpu->status | FLAG_UNUSED | FLAG_BREAK);
+    break;
+  case 0x68: // PLA
+    cpu->a = bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
+    SET_ZERO_NEGATIVE(cpu->a);
+    break;
+  case 0x28: // PLP
+    cpu->status = pop(cpu) & ~(FLAG_UNUSED | FLAG_BREAK);
     break;
   case 0x40: // RTI
     rti(cpu);
     break;
   case 0xB8: // CLV
     cpu_set_flag(cpu, FLAG_OVERFLOW, false);
-    break;
-  case 0x48: // PHA
-    bus_write(cpu->bus, 0x0100 + cpu->sp--, cpu->a);
-    break;
-  case 0x68: // PLA
-    cpu->a = bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
-    SET_ZERO_NEGATIVE(cpu->a);
     break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
