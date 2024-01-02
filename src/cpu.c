@@ -200,9 +200,14 @@ void cpu_step(CPU *cpu) {
     uint16_t ptr_hi = bus_read(cpu->bus, cpu->pc++, false);
     uint16_t ptr = (ptr_hi << 8) | ptr_lo;
 
-    addr = bus_read_wide(cpu->bus, ptr, false);
+    // simulate page boundary bug
+    if (ptr_lo == 0x00FF) {
+      addr = (bus_read(cpu->bus, ptr & 0xFF00, false)) << 8 |
+             (bus_read(cpu->bus, ptr, false));
+    } else {
+      addr = bus_read_wide(cpu->bus, ptr, false);
+    }
 
-    // TODO: check for page boundary crossing
     break;
   }
   case ADDR_MODE_IZX: {
@@ -290,7 +295,7 @@ void cpu_step(CPU *cpu) {
     break;
   case 0xE0:
   case 0xE4:
-  case 0xEC: 
+  case 0xEC:
     cmp(cpu, cpu->x, data);
     break;
   case 0xC0:
@@ -318,6 +323,10 @@ void cpu_step(CPU *cpu) {
     break;
   case 0xC8: // INY
     inc(cpu, &cpu->y, 1);
+    break;
+  case 0x4C:
+  case 0x6C: // JMP
+    cpu->pc = addr;
     break;
   case 0x40: // RTI
     rti(cpu);
