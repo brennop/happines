@@ -53,7 +53,7 @@ local function run_test(test, cpu)
   cpu.y = test.initial.y
   cpu.sp = test.initial.s
 
-  lib.cpu_step(cpu)
+  local cycles = lib.cpu_step(cpu)
 
   local function assert_register(name, target)
     local expected = tonumber(test.final[target])
@@ -121,6 +121,18 @@ local function run_test(test, cpu)
 
     assert(actual == value, message:format(test.name, address, value, actual))
   end
+
+  local message = [[
+  TEST FAILED
+    test: %s
+    innacurate cycles
+    expected: %d
+    actual: %d
+  ]]
+
+  -- check cycles
+  expected_cycles = #test.cycles
+  assert(expected_cycles == cycles, message:format(test.name, expected_cycles, cycles))
 end
 
 local function run_tests(tests, cpu)

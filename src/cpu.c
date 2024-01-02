@@ -73,7 +73,7 @@ static inline void cpu_set_flag(CPU *cpu, uint8_t mask, bool value) {
   }
 }
 
-static inline uint8_t adc(CPU *cpu, uint8_t data) {
+static inline void adc(CPU *cpu, uint8_t data) {
   uint16_t result = cpu->a + data + (cpu->status & FLAG_CARRY);
   cpu_set_flag(cpu, FLAG_CARRY, result > 0xFF);
   cpu_set_flag(cpu, FLAG_ZERO, (result & 0x00FF) == 0);
@@ -81,7 +81,6 @@ static inline uint8_t adc(CPU *cpu, uint8_t data) {
   cpu_set_flag(cpu, FLAG_OVERFLOW,
                (~(cpu->a ^ data) & (cpu->a ^ result)) & 0x80);
   cpu->a = result & 0x00FF;
-  return 1;
 }
 
 static inline void asl(CPU *cpu, uint8_t *ptr) {
@@ -151,7 +150,7 @@ static inline void rti(CPU *cpu) {
 
 void cpu_init(CPU *cpu, Bus *bus) { cpu->bus = bus; }
 
-void cpu_step(CPU *cpu) {
+uint8_t cpu_step(CPU *cpu) {
   uint8_t opcode = bus_read(cpu->bus, cpu->pc, false);
   Instruction instruction = instructions[opcode];
 
@@ -258,7 +257,7 @@ void cpu_step(CPU *cpu) {
 
   switch (opcode) {
   case CASE8_4(0x61): // ADC
-    operation_cycles = adc(cpu, data);
+    adc(cpu, data);
     break;
   case CASE8_4(0x21): // AND
     cpu->a &= data;
@@ -281,7 +280,8 @@ void cpu_step(CPU *cpu) {
     break;
   // FIXME: f1 takes too long
   case CASE8_4(0xE1):
-    operation_cycles = adc(cpu, ~data);
+    adc(cpu, ~data);
+    operation_cycles = 1;
     break;
   case 0x24: // BIT
   case 0x2c: // BIT
@@ -303,16 +303,19 @@ void cpu_step(CPU *cpu) {
     break;
   case CASE8_4(0xC1): // CMP
     cmp(cpu, cpu->a, data);
+    operation_cycles = 1;
     break;
   case 0xE0:
   case 0xE4:
   case 0xEC:
     cmp(cpu, cpu->x, data);
+    operation_cycles = 1;
     break;
   case 0xC0:
   case 0xC4:
   case 0xCC:
     cmp(cpu, cpu->y, data);
+    operation_cycles = 1;
     break;
   case CASE4(0xC6): // DEC
     inc(cpu, ptr, -1);
@@ -325,6 +328,7 @@ void cpu_step(CPU *cpu) {
     break;
   case CASE8_4(0x41): // EOR
     eor(cpu, data);
+    operation_cycles = 1;
     break;
   case CASE4(0xE6): // INC
     inc(cpu, ptr, 1);
@@ -347,15 +351,18 @@ void cpu_step(CPU *cpu) {
   case CASE8_4(0xA1): // LDX
     cpu->a = data;
     SET_ZERO_NEGATIVE(cpu->a);
+    operation_cycles = 1; 
     break;
   case CASE5(0xA2): // LDA
     cpu->x = data;
     SET_ZERO_NEGATIVE(cpu->x);
+    operation_cycles = 1;
     break;
   case 0xA0:
   case CASE4(0xA4): // LDY
     cpu->y = data;
     SET_ZERO_NEGATIVE(cpu->y);
+    operation_cycles = 1;
     break;
   case CASE5(0x46): // LSR
     lsr(cpu, ptr);
@@ -393,6 +400,7 @@ void cpu_step(CPU *cpu) {
   }
 
   cpu->cycles = cycles + (addressing_cycles & operation_cycles);
+  return cpu->cycles;
 }
 
 void cpu_reset(CPU *cpu) {

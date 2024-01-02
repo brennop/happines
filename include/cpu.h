@@ -29,7 +29,7 @@ typedef struct {
 } CPU;
 
 void cpu_init(CPU *cpu, Bus *bus);
-void cpu_step(CPU *cpu);
+uint8_t cpu_step(CPU *cpu);
 
 void cpu_reset(CPU *cpu);
 void cpu_irq(CPU *cpu);
