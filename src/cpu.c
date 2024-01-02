@@ -34,9 +34,9 @@ const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
 
 #define CASE5(x)                                                               \
   x:                                                                           \
-  case x + 0x04:                                                                  \
-  case x + 0x08:                                                                  \
-  case x + 0x10:                                                                 \
+  case x + 0x04:                                                               \
+  case x + 0x08:                                                               \
+  case x + 0x10:                                                               \
   case x + 0x18
 
 #define CHECK_PAGE_CROSSING(addr1, addr2)                                      \
@@ -87,6 +87,15 @@ static inline void asl(CPU *cpu, uint8_t *ptr) {
   cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
 }
 
+/**
+ * Zero = A & data
+ * status[6,7] = data[6,7]
+ */
+static inline void bit(CPU *cpu, uint8_t data) {
+  cpu->status =
+      (cpu->status & 0x3d) | (data & 0xc0) | ((data & cpu->a) == 0) << 1;
+}
+
 static inline void rti(CPU *cpu) {
   cpu->status = pop(cpu);
   cpu->status &= ~FLAG_BREAK;
@@ -109,7 +118,7 @@ void cpu_step(CPU *cpu) {
 
   uint16_t addr;
   uint8_t data;
-  uint8_t* ptr;
+  uint8_t *ptr;
 
   // Addressing modes
   switch (instruction.addressing_mode) {
@@ -211,10 +220,6 @@ void cpu_step(CPU *cpu) {
   case CASE5(0x06): // ASL
     asl(cpu, ptr);
     break;
-  // FIXME: f1 takes too long
-  case CASE8_4(0xE1):
-    operation_cycles = adc(cpu, ~data);
-    break;
   case VERT_8(0x10): // Branches
     if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
         ((opcode >> 5) & 0x01)) {
@@ -224,6 +229,14 @@ void cpu_step(CPU *cpu) {
       CHECK_PAGE_CROSSING(addr, cpu->pc);
       cpu->pc = addr;
     }
+    break;
+  // FIXME: f1 takes too long
+  case CASE8_4(0xE1):
+    operation_cycles = adc(cpu, ~data);
+    break;
+  case 0x24:
+  case 0x2c:
+    bit(cpu, data);
     break;
   case VERT_4(0x18):
     /**          flag mask value
