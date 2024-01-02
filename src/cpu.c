@@ -117,8 +117,8 @@ static inline void cmp(CPU *cpu, uint8_t source, uint8_t data) {
   cpu_set_flag(cpu, FLAG_CARRY, result <= 0xff);
 }
 
-static inline void dec(CPU *cpu, uint8_t *value) {
-  (*value)--;
+static inline void inc(CPU *cpu, uint8_t *value, uint8_t ammount) {
+  (*value) += ammount;
   cpu_set_flag(cpu, FLAG_NEGATIVE, *value & 0x80);
   cpu_set_flag(cpu, FLAG_ZERO, *value == 0);
 }
@@ -299,16 +299,25 @@ void cpu_step(CPU *cpu) {
     cmp(cpu, cpu->y, data);
     break;
   case CASE4(0xC6): // DEC
-    dec(cpu, ptr);
+    inc(cpu, ptr, -1);
     break;
   case 0xCA: // DEX
-    dec(cpu, &cpu->x);
+    inc(cpu, &cpu->x, -1);
     break;
   case 0x88: // DEY
-    dec(cpu, &cpu->y);
+    inc(cpu, &cpu->y, -1);
     break;
-  case CASE8_4(0x41):
+  case CASE8_4(0x41): // EOR
     eor(cpu, data);
+    break;
+  case CASE4(0xE6): // INC
+    inc(cpu, ptr, 1);
+    break;
+  case 0xE8: // INX
+    inc(cpu, &cpu->x, 1);
+    break;
+  case 0xC8: // INY
+    inc(cpu, &cpu->y, 1);
     break;
   case 0x40: // RTI
     rti(cpu);
