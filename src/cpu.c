@@ -45,6 +45,14 @@ uint8_t cpu_bus_read(CPU *cpu, uint16_t addr, bool readonly) {
   return bus_read(cpu->bus, addr, readonly);
 }
 
+static inline void push(CPU *cpu, uint8_t data) {
+  bus_write(cpu->bus, 0x0100 + cpu->sp--, data);
+}
+
+static inline uint8_t pop(CPU *cpu) {
+  return bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
+}
+
 static inline void cpu_set_flag(CPU *cpu, uint8_t mask, bool value) {
   if (value) {
     cpu->status |= mask;
@@ -58,9 +66,19 @@ static inline uint8_t adc(CPU *cpu, uint8_t data) {
   cpu_set_flag(cpu, FLAG_CARRY, result > 0xFF);
   cpu_set_flag(cpu, FLAG_ZERO, (result & 0x00FF) == 0);
   cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
-  cpu_set_flag(cpu, FLAG_OVERFLOW, (~(cpu->a ^ data) & (cpu->a ^ result)) & 0x80);
+  cpu_set_flag(cpu, FLAG_OVERFLOW,
+               (~(cpu->a ^ data) & (cpu->a ^ result)) & 0x80);
   cpu->a = result & 0x00FF;
   return 1;
+}
+
+static inline void rti(CPU *cpu) {
+  cpu->status = pop(cpu);
+  cpu->status &= ~FLAG_BREAK;
+  cpu->status &= ~FLAG_UNUSED;
+
+  cpu->pc = pop(cpu);
+  cpu->pc |= (uint16_t)pop(cpu) << 8;
 }
 
 void cpu_init(CPU *cpu, Bus *bus) { cpu->bus = bus; }
@@ -169,9 +187,13 @@ void cpu_step(CPU *cpu) {
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
     break;
-  case CASE8_4(0x61): operation_cycles = adc(cpu, data); break;
+  case CASE8_4(0x61):
+    operation_cycles = adc(cpu, data);
+    break;
   // FIXME: f1 takes too long
-  case CASE8_4(0xE1): operation_cycles = adc(cpu, ~data); break;
+  case CASE8_4(0xE1):
+    operation_cycles = adc(cpu, ~data);
+    break;
   case VERT_8(0x10): // Branches
     if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
         ((opcode >> 5) & 0x01)) {
@@ -193,8 +215,19 @@ void cpu_step(CPU *cpu) {
      */
     cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20);
     break;
+  case 0x40: // RTI
+    rti(cpu);
+    break;
   case 0xB8: // CLV
     cpu_set_flag(cpu, FLAG_OVERFLOW, false);
+    break;
+  case 0x48: // PHA
+    bus_write(cpu->bus, 0x0100 + cpu->sp--, cpu->a);
+    break;
+  case 0x68: // PLA
+    cpu->a = bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
+    cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
+    cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
@@ -205,6 +238,50 @@ void cpu_step(CPU *cpu) {
   cpu->cycles = cycles + (addressing_cycles & operation_cycles);
 }
 
-void cpu_reset(CPU *cpu);
-void cpu_irq(CPU *cpu);
-void cpu_nmi(CPU *cpu);
+void cpu_reset(CPU *cpu) {
+  cpu->a = 0;
+  cpu->x = 0;
+  cpu->y = 0;
+  cpu->sp = 0xFD;
+  cpu->status = 0x00 | FLAG_UNUSED; // Unused flag is always 1
+
+  cpu->pc = bus_read_wide(cpu->bus, 0xFFFC, false);
+
+  cpu->cycles = 8;
+}
+
+void cpu_irq(CPU *cpu) {
+  if (!(cpu->status & FLAG_INTERRUPT_DISABLE)) {
+    // save pc
+    push(cpu, (cpu->pc >> 8) & 0x00FF);
+    push(cpu, cpu->pc & 0x00FF);
+
+    cpu_set_flag(cpu, FLAG_BREAK, false);
+    cpu_set_flag(cpu, FLAG_INTERRUPT_DISABLE, true);
+    cpu_set_flag(cpu, FLAG_UNUSED, true);
+
+    // save status
+    push(cpu, cpu->status);
+
+    cpu->pc = bus_read_wide(cpu->bus, 0xFFFE, false);
+
+    cpu->cycles = 7;
+  }
+}
+
+void cpu_nmi(CPU *cpu) {
+  // save pc
+  push(cpu, (cpu->pc >> 8) & 0x00FF);
+  push(cpu, cpu->pc & 0x00FF);
+
+  cpu_set_flag(cpu, FLAG_BREAK, false);
+  cpu_set_flag(cpu, FLAG_INTERRUPT_DISABLE, true);
+  cpu_set_flag(cpu, FLAG_UNUSED, true);
+
+  // save status
+  push(cpu, cpu->status);
+
+  cpu->pc = bus_read_wide(cpu->bus, 0xFFFA, false);
+
+  cpu->cycles = 8;
+}
