@@ -107,6 +107,15 @@ static inline void brk(CPU *cpu) {
   cpu->pc = bus_read_wide(cpu->bus, 0xFFFE, false);
 }
 
+static inline void cmp(CPU *cpu, uint8_t source, uint8_t data) {
+  uint16_t result = source - data;
+  cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
+  cpu_set_flag(cpu, FLAG_ZERO, result == 0);
+
+  // TODO: understand why carry is <= 0xff
+  cpu_set_flag(cpu, FLAG_CARRY, result <= 0xff);
+}
+
 static inline void rti(CPU *cpu) {
   cpu->status = pop(cpu);
   cpu->status &= ~FLAG_BREAK;
@@ -262,6 +271,15 @@ void cpu_step(CPU *cpu) {
      * value = bit 5 of opcode
      */
     cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20);
+    break;
+  case CASE8_4(0xC1):
+    cmp(cpu, cpu->a, data);
+    break;
+  case 0xE0: case 0xE4: case 0xEC:
+    cmp(cpu, cpu->x, data);
+    break;
+  case 0xC0: case 0xC4: case 0xCC:
+    cmp(cpu, cpu->y, data);
     break;
   case 0x40: // RTI
     rti(cpu);
