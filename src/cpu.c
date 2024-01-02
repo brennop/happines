@@ -32,6 +32,13 @@ const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
   case x + 0x40:                                                               \
   case x + 0x60
 
+#define CASE5(x)                                                               \
+  x:                                                                           \
+  case x + 0x04:                                                                  \
+  case x + 0x08:                                                                  \
+  case x + 0x10:                                                                 \
+  case x + 0x18
+
 #define CHECK_PAGE_CROSSING(addr1, addr2)                                      \
   if ((addr1 & 0xFF00) != (addr2 & 0xFF00)) {                                  \
     cycles++;                                                                  \
@@ -72,6 +79,14 @@ static inline uint8_t adc(CPU *cpu, uint8_t data) {
   return 1;
 }
 
+static inline void asl(CPU *cpu, uint8_t *ptr) {
+  uint16_t result = *ptr << 1;
+  *ptr = result & 0x00FF;
+  cpu_set_flag(cpu, FLAG_CARRY, result & 0xFF00);
+  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
+}
+
 static inline void rti(CPU *cpu) {
   cpu->status = pop(cpu);
   cpu->status &= ~FLAG_BREAK;
@@ -94,11 +109,13 @@ void cpu_step(CPU *cpu) {
 
   uint16_t addr;
   uint8_t data;
+  uint8_t* ptr;
 
   // Addressing modes
   switch (instruction.addressing_mode) {
   case ADDR_MODE_IMP:
     data = cpu->a;
+    ptr = &cpu->a;
     break;
   case ADDR_MODE_IMM:
     addr = cpu->pc++;
@@ -177,18 +194,22 @@ void cpu_step(CPU *cpu) {
   }
 
   if (instruction.addressing_mode != ADDR_MODE_IMP) {
-    data = bus_read(cpu->bus, addr, false);
+    ptr = bus_get_ptr(cpu->bus, addr, false);
+    data = *ptr;
   }
 
   switch (opcode) {
+  case CASE8_4(0x61): // ADC
+    operation_cycles = adc(cpu, data);
+    break;
   case CASE8_4(0x21): // AND
     cpu->a &= data;
     cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
     break;
-  case CASE8_4(0x61):
-    operation_cycles = adc(cpu, data);
+  case CASE5(0x06): // ASL
+    asl(cpu, ptr);
     break;
   // FIXME: f1 takes too long
   case CASE8_4(0xE1):
