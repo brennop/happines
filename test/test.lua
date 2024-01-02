@@ -134,6 +134,11 @@ local function run_tests(tests, cpu)
       print(err)
       errors = errors + 1
     end
+
+    if errors > 100 then
+      print("stopping, too many errors")
+      break
+    end
   end
 
   print(string.format("Passing: %d/%d", 10000 - errors, 10000))

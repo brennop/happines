@@ -96,6 +96,17 @@ static inline void bit(CPU *cpu, uint8_t data) {
       (cpu->status & 0x3d) | (data & 0xc0) | ((data & cpu->a) == 0) << 1;
 }
 
+static inline void brk(CPU *cpu) {
+  push(cpu, (cpu->pc >> 8) & 0x00FF);
+  push(cpu, cpu->pc & 0x00FF);
+
+  // push status with break set
+  push(cpu, cpu->status | 0x10); 
+
+  cpu_set_flag(cpu, FLAG_INTERRUPT_DISABLE, true);
+  cpu->pc = bus_read_wide(cpu->bus, 0xFFFE, false);
+}
+
 static inline void rti(CPU *cpu) {
   cpu->status = pop(cpu);
   cpu->status &= ~FLAG_BREAK;
@@ -234,9 +245,12 @@ void cpu_step(CPU *cpu) {
   case CASE8_4(0xE1):
     operation_cycles = adc(cpu, ~data);
     break;
-  case 0x24:
-  case 0x2c:
+  case 0x24: // BIT
+  case 0x2c: // BIT
     bit(cpu, data);
+    break;
+  case 0x00: // BRK
+    brk(cpu);
     break;
   case VERT_4(0x18):
     /**          flag mask value
