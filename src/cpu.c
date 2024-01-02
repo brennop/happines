@@ -45,6 +45,10 @@ const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
     cycles++;                                                                  \
   }
 
+#define SET_ZERO_NEGATIVE(value) \
+  cpu_set_flag(cpu, FLAG_ZERO, value == 0x00); \
+  cpu_set_flag(cpu, FLAG_NEGATIVE, value & 0x80); \
+
 void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
   bus_write(cpu->bus, addr, data);
 }
@@ -328,6 +332,24 @@ void cpu_step(CPU *cpu) {
   case 0x6C: // JMP
     cpu->pc = addr;
     break;
+  case 0x20: // JSR
+    push(cpu, (cpu->pc >> 8) & 0x00FF);
+    push(cpu, cpu->pc & 0x00FF);
+    cpu->pc = addr;
+    break;
+  case CASE8_4(0xA1):
+    cpu->a = data;
+    SET_ZERO_NEGATIVE(cpu->a);
+    break;
+  case CASE5(0xA2):
+    cpu->x = data;
+    SET_ZERO_NEGATIVE(cpu->x);
+    break;
+  case 0xA0:
+  case CASE4(0xA4):
+    cpu->y = data;
+    SET_ZERO_NEGATIVE(cpu->y);
+    break;
   case 0x40: // RTI
     rti(cpu);
     break;
@@ -339,8 +361,7 @@ void cpu_step(CPU *cpu) {
     break;
   case 0x68: // PLA
     cpu->a = bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
-    cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
-    cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
+    SET_ZERO_NEGATIVE(cpu->a);
     break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
