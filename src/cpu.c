@@ -32,12 +32,13 @@ const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
   case x + 0x40:                                                               \
   case x + 0x60
 
-#define CASE5(x)                                                               \
+#define CASE4(x)                                                               \
   x:                                                                           \
-  case x + 0x04:                                                               \
   case x + 0x08:                                                               \
   case x + 0x10:                                                               \
   case x + 0x18
+
+#define CASE5(x) CASE4(x) : case x + 0x04
 
 #define CHECK_PAGE_CROSSING(addr1, addr2)                                      \
   if ((addr1 & 0xFF00) != (addr2 & 0xFF00)) {                                  \
@@ -101,7 +102,7 @@ static inline void brk(CPU *cpu) {
   push(cpu, cpu->pc & 0x00FF);
 
   // push status with break set
-  push(cpu, cpu->status | 0x10); 
+  push(cpu, cpu->status | 0x10);
 
   cpu_set_flag(cpu, FLAG_INTERRUPT_DISABLE, true);
   cpu->pc = bus_read_wide(cpu->bus, 0xFFFE, false);
@@ -114,6 +115,12 @@ static inline void cmp(CPU *cpu, uint8_t source, uint8_t data) {
 
   // TODO: understand why carry is <= 0xff
   cpu_set_flag(cpu, FLAG_CARRY, result <= 0xff);
+}
+
+static inline void dec(CPU *cpu, uint8_t *value) {
+  (*value)--;
+  cpu_set_flag(cpu, FLAG_NEGATIVE, *value & 0x80);
+  cpu_set_flag(cpu, FLAG_ZERO, *value == 0);
 }
 
 static inline void rti(CPU *cpu) {
@@ -272,14 +279,27 @@ void cpu_step(CPU *cpu) {
      */
     cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20);
     break;
-  case CASE8_4(0xC1):
+  case CASE8_4(0xC1): // CMP
     cmp(cpu, cpu->a, data);
     break;
-  case 0xE0: case 0xE4: case 0xEC:
+  case 0xE0:
+  case 0xE4:
+  case 0xEC: 
     cmp(cpu, cpu->x, data);
     break;
-  case 0xC0: case 0xC4: case 0xCC:
+  case 0xC0:
+  case 0xC4:
+  case 0xCC:
     cmp(cpu, cpu->y, data);
+    break;
+  case CASE4(0xC6): // DEC
+    dec(cpu, ptr);
+    break;
+  case 0xCA: // DEX
+    dec(cpu, &cpu->x);
+    break;
+  case 0x88: // DEY
+    dec(cpu, &cpu->y);
     break;
   case 0x40: // RTI
     rti(cpu);
