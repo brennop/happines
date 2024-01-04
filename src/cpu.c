@@ -6,52 +6,50 @@
 
 const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
 
-#define CASE8_4(x)                                                             \
-  x:                                                                           \
-  case x + 4:                                                                  \
-  case x + 8:                                                                  \
-  case x + 12:                                                                 \
-  case x + 16:                                                                 \
-  case x + 20:                                                                 \
-  case x + 24:                                                                 \
+#define CASE8_4(x)                                                                             \
+  x:                                                                                           \
+  case x + 4:                                                                                  \
+  case x + 8:                                                                                  \
+  case x + 12:                                                                                 \
+  case x + 16:                                                                                 \
+  case x + 20:                                                                                 \
+  case x + 24:                                                                                 \
   case x + 28
 
-#define VERT_8(x)                                                              \
-  x:                                                                           \
-  case x + 0x20:                                                               \
-  case x + 0x40:                                                               \
-  case x + 0x60:                                                               \
-  case x + 0x80:                                                               \
-  case x + 0xA0:                                                               \
-  case x + 0xC0:                                                               \
+#define VERT_8(x)                                                                              \
+  x:                                                                                           \
+  case x + 0x20:                                                                               \
+  case x + 0x40:                                                                               \
+  case x + 0x60:                                                                               \
+  case x + 0x80:                                                                               \
+  case x + 0xA0:                                                                               \
+  case x + 0xC0:                                                                               \
   case x + 0xE0
 
-#define VERT_4(x)                                                              \
-  x:                                                                           \
-  case x + 0x20:                                                               \
-  case x + 0x40:                                                               \
+#define VERT_4(x)                                                                              \
+  x:                                                                                           \
+  case x + 0x20:                                                                               \
+  case x + 0x40:                                                                               \
   case x + 0x60
 
-#define CASE4(x)                                                               \
-  x:                                                                           \
-  case x + 0x08:                                                               \
-  case x + 0x10:                                                               \
+#define CASE4(x)                                                                               \
+  x:                                                                                           \
+  case x + 0x08:                                                                               \
+  case x + 0x10:                                                                               \
   case x + 0x18
 
 #define CASE5(x) CASE4(x) : case x + 0x04
 
-#define CHECK_PAGE_CROSSING(addr1, addr2)                                      \
-  if ((addr1 & 0xFF00) != (addr2 & 0xFF00)) {                                  \
-    cycles++;                                                                  \
+#define CHECK_PAGE_CROSSING(addr1, addr2)                                                      \
+  if ((addr1 & 0xFF00) != (addr2 & 0xFF00)) {                                                  \
+    cycles++;                                                                                  \
   }
 
-#define SET_ZERO_NEGATIVE(value)                                               \
-  cpu_set_flag(cpu, FLAG_ZERO, value == 0x00);                                 \
+#define SET_ZERO_NEGATIVE(value)                                                               \
+  cpu_set_flag(cpu, FLAG_ZERO, value == 0x00);                                                 \
   cpu_set_flag(cpu, FLAG_NEGATIVE, value & 0x80);
 
-void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
-  bus_write(cpu->bus, addr, data);
-}
+void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) { bus_write(cpu->bus, addr, data); }
 
 uint8_t cpu_bus_read(CPU *cpu, uint16_t addr, bool readonly) {
   return bus_read(cpu->bus, addr, readonly);
@@ -61,9 +59,7 @@ static inline void push(CPU *cpu, uint8_t data) {
   bus_write(cpu->bus, 0x0100 + cpu->sp--, data);
 }
 
-static inline uint8_t pop(CPU *cpu) {
-  return bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
-}
+static inline uint8_t pop(CPU *cpu) { return bus_read(cpu->bus, 0x0100 + ++cpu->sp, false); }
 
 static inline void cpu_set_flag(CPU *cpu, uint8_t mask, bool value) {
   if (value) {
@@ -78,8 +74,7 @@ static inline void adc(CPU *cpu, uint8_t data) {
   cpu_set_flag(cpu, FLAG_CARRY, result > 0xFF);
   cpu_set_flag(cpu, FLAG_ZERO, (result & 0x00FF) == 0);
   cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
-  cpu_set_flag(cpu, FLAG_OVERFLOW,
-               (~(cpu->a ^ data) & (cpu->a ^ result)) & 0x80);
+  cpu_set_flag(cpu, FLAG_OVERFLOW, (~(cpu->a ^ data) & (cpu->a ^ result)) & 0x80);
   cpu->a = result & 0x00FF;
 }
 
@@ -96,8 +91,7 @@ static inline void asl(CPU *cpu, uint8_t *ptr) {
  * status[6,7] = data[6,7]
  */
 static inline void bit(CPU *cpu, uint8_t data) {
-  cpu->status =
-      (cpu->status & 0x3d) | (data & 0xc0) | ((data & cpu->a) == 0) << 1;
+  cpu->status = (cpu->status & 0x3d) | (data & 0xc0) | ((data & cpu->a) == 0) << 1;
 }
 
 static inline void brk(CPU *cpu) {
@@ -169,18 +163,10 @@ uint8_t cpu_step(CPU *cpu) {
     data = cpu->a;
     ptr = &cpu->a;
     break;
-  case ADDR_MODE_IMM:
-    addr = cpu->pc++;
-    break;
-  case ADDR_MODE_ZP0:
-    addr = bus_read(cpu->bus, cpu->pc++, false) & 0x00FF;
-    break;
-  case ADDR_MODE_ZPX:
-    addr = (bus_read(cpu->bus, cpu->pc++, false) + cpu->x) & 0x00FF;
-    break;
-  case ADDR_MODE_ZPY:
-    addr = (bus_read(cpu->bus, cpu->pc++, false) + cpu->y) & 0x00FF;
-    break;
+  case ADDR_MODE_IMM: addr = cpu->pc++; break;
+  case ADDR_MODE_ZP0: addr = bus_read(cpu->bus, cpu->pc++, false) & 0x00FF; break;
+  case ADDR_MODE_ZPX: addr = (bus_read(cpu->bus, cpu->pc++, false) + cpu->x) & 0x00FF; break;
+  case ADDR_MODE_ZPY: addr = (bus_read(cpu->bus, cpu->pc++, false) + cpu->y) & 0x00FF; break;
   case ADDR_MODE_ABS:
     addr = bus_read(cpu->bus, cpu->pc++, false);
     addr |= (uint16_t)(bus_read(cpu->bus, cpu->pc++, false) << 8);
@@ -212,8 +198,7 @@ uint8_t cpu_step(CPU *cpu) {
 
     // simulate page boundary bug
     if (ptr_lo == 0x00FF) {
-      addr = (bus_read(cpu->bus, ptr & 0xFF00, false)) << 8 |
-             (bus_read(cpu->bus, ptr, false));
+      addr = (bus_read(cpu->bus, ptr & 0xFF00, false)) << 8 | (bus_read(cpu->bus, ptr, false));
     } else {
       addr = bus_read_wide(cpu->bus, ptr, false);
     }
@@ -222,10 +207,8 @@ uint8_t cpu_step(CPU *cpu) {
   }
   case ADDR_MODE_IZX: {
     uint16_t t = bus_read(cpu->bus, cpu->pc++, false);
-    uint16_t lo =
-        bus_read(cpu->bus, (uint16_t)(t + (uint16_t)cpu->x) & 0x00FF, false);
-    uint16_t hi = bus_read(
-        cpu->bus, (uint16_t)(t + (uint16_t)cpu->x + 1) & 0x00FF, false);
+    uint16_t lo = bus_read(cpu->bus, (uint16_t)(t + (uint16_t)cpu->x) & 0x00FF, false);
+    uint16_t hi = bus_read(cpu->bus, (uint16_t)(t + (uint16_t)cpu->x + 1) & 0x00FF, false);
 
     addr = (hi << 8) | lo;
     break;
@@ -256,21 +239,16 @@ uint8_t cpu_step(CPU *cpu) {
   }
 
   switch (opcode) {
-  case CASE8_4(0x61): // ADC
-    adc(cpu, data);
-    break;
-  case CASE8_4(0x21): // AND
+  case CASE8_4(0x61): adc(cpu, data); break;
+  case CASE8_4(0x21):
     cpu->a &= data;
     cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
     break;
-  case CASE5(0x06): // ASL
-    asl(cpu, ptr);
-    break;
-  case VERT_8(0x10): // Branches
-    if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
-        ((opcode >> 5) & 0x01)) {
+  case CASE5(0x06): asl(cpu, ptr); break;
+  case VERT_8(0x10):
+    if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) == ((opcode >> 5) & 0x01)) {
       cycles++;
       addr = cpu->pc + addr;
       // TODO: sum instead of branch
@@ -283,24 +261,18 @@ uint8_t cpu_step(CPU *cpu) {
     adc(cpu, ~data);
     operation_cycles = 1;
     break;
-  case 0x24: // BIT
-  case 0x2c: // BIT
-    bit(cpu, data);
-    break;
-  case 0x00: // BRK
-    brk(cpu);
-    break;
-  case VERT_4(0x18):
-    /**          flag mask value
-     * CLC 0x18   C   0x01  0
-     * SEC 0x38   C   0x01  1
-     * CLI 0x58   I   0x04  0
-     * SEI 0x78   I   0x04  1
-     * mask = 2 ** (opcode >> 6) * 2
-     * value = bit 5 of opcode
-     */
-    cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20);
-    break;
+  case 0x24:
+  case 0x2c: bit(cpu, data); break;
+  case 0x00: brk(cpu); break;
+  /**          flag mask value
+   * CLC 0x18   C   0x01  0
+   * SEC 0x38   C   0x01  1
+   * CLI 0x58   I   0x04  0
+   * SEI 0x78   I   0x04  1
+   * mask = 2 ** (opcode >> 6) * 2
+   * value = bit 5 of opcode
+   */
+  case VERT_4(0x18): cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20); break;
   case CASE8_4(0xC1): // CMP
     cmp(cpu, cpu->a, data);
     operation_cycles = 1;
@@ -317,32 +289,18 @@ uint8_t cpu_step(CPU *cpu) {
     cmp(cpu, cpu->y, data);
     operation_cycles = 1;
     break;
-  case CASE4(0xC6): // DEC
-    inc(cpu, ptr, -1);
-    break;
-  case 0xCA: // DEX
-    inc(cpu, &cpu->x, -1);
-    break;
-  case 0x88: // DEY
-    inc(cpu, &cpu->y, -1);
-    break;
+  case CASE4(0xC6): inc(cpu, ptr, -1); break;
+  case 0xCA: inc(cpu, &cpu->x, -1); break;
+  case 0x88: inc(cpu, &cpu->y, -1); break;
   case CASE8_4(0x41): // EOR
     eor(cpu, data);
     operation_cycles = 1;
     break;
-  case CASE4(0xE6): // INC
-    inc(cpu, ptr, 1);
-    break;
-  case 0xE8: // INX
-    inc(cpu, &cpu->x, 1);
-    break;
-  case 0xC8: // INY
-    inc(cpu, &cpu->y, 1);
-    break;
+  case CASE4(0xE6): inc(cpu, ptr, 1); break;
+  case 0xE8: inc(cpu, &cpu->x, 1); break;
+  case 0xC8: inc(cpu, &cpu->y, 1); break;
   case 0x4C:
-  case 0x6C: // JMP
-    cpu->pc = addr;
-    break;
+  case 0x6C: cpu->pc = addr; break;
   case 0x20: // JSR
     push(cpu, (cpu->pc >> 8) & 0x00FF);
     push(cpu, cpu->pc & 0x00FF);
@@ -351,7 +309,7 @@ uint8_t cpu_step(CPU *cpu) {
   case CASE8_4(0xA1): // LDX
     cpu->a = data;
     SET_ZERO_NEGATIVE(cpu->a);
-    operation_cycles = 1; 
+    operation_cycles = 1;
     break;
   case CASE5(0xA2): // LDA
     cpu->x = data;
@@ -364,35 +322,22 @@ uint8_t cpu_step(CPU *cpu) {
     SET_ZERO_NEGATIVE(cpu->y);
     operation_cycles = 1;
     break;
-  case CASE5(0x46): // LSR
-    lsr(cpu, ptr);
-    break;
-  case 0xEA: // NOP
-    break;
+  case CASE5(0x46): lsr(cpu, ptr); break;
+  case 0xEA: break;
   case CASE8_4(0x01): // ORA
     cpu->a |= data;
     SET_ZERO_NEGATIVE(cpu->a);
     operation_cycles = 1;
     break;
-  case 0x48: // PHA
-    push(cpu, cpu->a);
-    break;
-  case 0x08: // PHP
-    push(cpu, cpu->status | FLAG_UNUSED | FLAG_BREAK);
-    break;
+  case 0x48: push(cpu, cpu->a); break;
+  case 0x08: push(cpu, cpu->status | FLAG_UNUSED | FLAG_BREAK); break;
   case 0x68: // PLA
     cpu->a = bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
     SET_ZERO_NEGATIVE(cpu->a);
     break;
-  case 0x28: // PLP
-    cpu->status = pop(cpu) & ~(FLAG_UNUSED | FLAG_BREAK);
-    break;
-  case 0x40: // RTI
-    rti(cpu);
-    break;
-  case 0xB8: // CLV
-    cpu_set_flag(cpu, FLAG_OVERFLOW, false);
-    break;
+  case 0x28: cpu->status = pop(cpu) & ~(FLAG_UNUSED | FLAG_BREAK); break;
+  case 0x40: rti(cpu); break;
+  case 0xB8: cpu_set_flag(cpu, FLAG_OVERFLOW, false); break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
     exit(1);

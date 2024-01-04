@@ -25,6 +25,8 @@ local function load_cpu()
   local cpu = ffi.new("CPU")
   local bus = ffi.new("Bus")
 
+  lib.mapper_init(bus.mapper, 0xffffffff)
+
   lib.cpu_init(cpu, bus)
 
   return cpu
@@ -157,6 +159,7 @@ local function run_tests(tests, cpu)
 end
 
 local function main()
+  def_header("mapper")
   def_header("bus")
   def_header("cpu")
 
