@@ -35,6 +35,19 @@ void emulator_init(Emulator *emulator, char *filename) {
 
   bus_init(&emulator->bus);
   mapper_init(&emulator->bus.mapper, mapper_id);
+  cpu_init(&emulator->cpu, &emulator->bus);
+  ppu_init(&emulator->ppu, &emulator->bus);
 }
 
-void emulator_step(Emulator *emulator) {}
+void emulator_step(Emulator *emulator) {
+  while (emulator->ppu.frame_complete == false) {
+    ppu_step(&emulator->ppu);
+    if (emulator->cycles % 3 == 0) {
+      cpu_step(&emulator->cpu);
+    }
+
+    emulator->cycles++;
+  }
+
+  emulator->ppu.frame_complete = false;
+}

@@ -2,6 +2,8 @@
 #define __EMULATOR_H__
 
 #include "bus.h"
+#include "cpu.h"
+#include "ppu.h"
 #include "mapper.h"
 
 #define NES_MAGIC_NUMBER "NES\x1a"
@@ -23,6 +25,8 @@ typedef struct {
 
 typedef struct {
   Bus bus;
+  CPU cpu;
+  PPU ppu;
 
   /**
    * Cartridge

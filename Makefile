@@ -45,6 +45,10 @@ clean:
 run: $(TARGET)
 	./$(TARGET)
 
+# nestest.nes target
+nestest: $(TARGET)
+	./$(TARGET) test/nestest.nes
+
 # Shared library target
 shared: $(OBJ_FILES)
 	@mkdir -p $(LIB_DIR)

@@ -142,7 +142,10 @@ static inline void rti(CPU *cpu) {
   cpu->pc |= (uint16_t)pop(cpu) << 8;
 }
 
-void cpu_init(CPU *cpu, Bus *bus) { cpu->bus = bus; }
+void cpu_init(CPU *cpu, Bus *bus) { 
+  cpu->bus = bus; 
+  cpu_reset(cpu);
+}
 
 uint8_t cpu_step(CPU *cpu) {
   uint8_t opcode = bus_read(cpu->bus, cpu->pc, false);
