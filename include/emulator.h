@@ -10,19 +10,6 @@
 #define NES_PRG_ROM_CHUNK_SIZE 0x4000
 #define NES_CHR_ROM_CHUNK_SIZE 0x2000
 
-// iNES header
-typedef struct {
-  char magic[4];
-  uint8_t prg_rom_chunks;
-  uint8_t chr_rom_chunks;
-  uint8_t flags_6;
-  uint8_t flags_7;
-  uint8_t flags_8;
-  uint8_t flags_9;
-  uint8_t flags_10;
-  uint8_t zero[5];
-} Header;
-
 typedef struct {
   Bus bus;
   CPU cpu;
@@ -31,7 +18,7 @@ typedef struct {
   /**
    * Cartridge
    */
-  Header header;
+  uint8_t header[16];
 
   int cycles;
 } Emulator;

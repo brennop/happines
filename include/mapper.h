@@ -10,12 +10,12 @@ typedef struct Mapper {
   // TODO: only for 6502 tests
   uint8_t ram[0x10000];
 
-  uint8_t prg_rom_size;
+  uint32_t prg_rom_size;
   uint8_t prg_banks;
   uint8_t prg_rom[0x4000 * 64];
 
+  uint32_t chr_rom_size;
   uint8_t chr_banks;
-  uint8_t chr_rom_size;
   uint8_t chr_rom[0x2000 * 64];
 } Mapper;
 
