@@ -326,6 +326,9 @@ uint8_t cpu_step(CPU *cpu) {
   case VERT_4(0x18):
     cpu_set_flag(cpu, 1 << ((opcode >> 6) << 1), opcode & 0x20);
     break;
+  case 0xB8:
+    cpu_set_flag(cpu, FLAG_OVERFLOW, false);
+    break;
   case CASE8_4(0xC1): // CMP
     cmp(cpu, cpu->a, data);
     operation_cycles = 1;
@@ -421,9 +424,16 @@ uint8_t cpu_step(CPU *cpu) {
   case 0x40:
     rti(cpu);
     break;
-  case 0xB8:
-    cpu_set_flag(cpu, FLAG_OVERFLOW, false);
+  case 0x60:
+    cpu->pc = (pop(cpu) | ((uint16_t)pop(cpu) << 8)) + 1;
     break;
+  case CASE8_4(0x81):
+    bus_write(cpu->bus, addr, cpu->a);
+    break;
+  case CASE4(0x86):
+    bus_write(cpu->bus, addr, cpu->x);
+  case CASE4(0x84):
+    bus_write(cpu->bus, addr, cpu->y);
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
     exit(1);
