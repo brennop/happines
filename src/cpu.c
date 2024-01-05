@@ -143,6 +143,22 @@ static inline void lsr(CPU *cpu, uint8_t *ptr) {
   cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
 }
 
+static inline void rol(CPU *cpu, uint8_t *ptr) {
+  uint16_t result = *ptr << 1 | (cpu->status & 0x01);
+  *ptr = result;
+  cpu_set_flag(cpu, FLAG_CARRY, result & 0xFF00);
+  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
+}
+
+static inline void ror(CPU *cpu, uint8_t *ptr) {
+  uint8_t result = *ptr >> 1 | (cpu->status << 7);
+  cpu_set_flag(cpu, FLAG_CARRY, *ptr & 0x1);
+  *ptr = result;
+  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
+}
+
 static inline void rti(CPU *cpu) {
   cpu->status = pop(cpu);
   cpu->status &= ~FLAG_BREAK;
@@ -155,10 +171,6 @@ static inline void rti(CPU *cpu) {
 void cpu_init(CPU *cpu, Bus *bus) {
   cpu->bus = bus;
   cpu_reset(cpu);
-
-  printf("PC Address: %04X\n", cpu->pc);
-
-  getchar();
 }
 
 uint8_t cpu_step(CPU *cpu) {
@@ -266,7 +278,7 @@ uint8_t cpu_step(CPU *cpu) {
     data = *ptr;
   }
 
-  cpu_trace(instruction, cpu->pc, data);
+  /* cpu_trace(instruction, cpu->pc, data); */
 
   switch (opcode) {
   case CASE8_4(0x61):
@@ -397,8 +409,14 @@ uint8_t cpu_step(CPU *cpu) {
     cpu->a = bus_read(cpu->bus, 0x0100 + ++cpu->sp, false);
     SET_ZERO_NEGATIVE(cpu->a);
     break;
-  case 0x28:
+  case 0x28: // PLP
     cpu->status = pop(cpu) & ~(FLAG_UNUSED | FLAG_BREAK);
+    break;
+  case CASE5(0x26):
+    rol(cpu, ptr);
+    break;
+  case CASE5(0x66):
+    ror(cpu, ptr);
     break;
   case 0x40:
     rti(cpu);
