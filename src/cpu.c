@@ -376,12 +376,13 @@ uint8_t cpu_step(CPU *cpu) {
     push(cpu, cpu->pc & 0x00FF);
     cpu->pc = addr;
     break;
-  case CASE8_4(0xA1): // LDX
+  case CASE8_4(0xA1): // LDA
     cpu->a = data;
     SET_ZERO_NEGATIVE(cpu->a);
     operation_cycles = 1;
     break;
-  case CASE5(0xA2): // LDA
+  case 0xA2:
+  case CASE4(0xA6): // LDX
     cpu->x = data;
     SET_ZERO_NEGATIVE(cpu->x);
     operation_cycles = 1;
@@ -434,6 +435,29 @@ uint8_t cpu_step(CPU *cpu) {
     bus_write(cpu->bus, addr, cpu->x);
   case CASE4(0x84):
     bus_write(cpu->bus, addr, cpu->y);
+  case 0xAA:
+    cpu->x = cpu->a;
+    SET_ZERO_NEGATIVE(cpu->x);
+    break;
+  case 0xA8:
+    cpu->y = cpu->a;
+    SET_ZERO_NEGATIVE(cpu->y);
+    break;
+  case 0x8A:
+    cpu->a = cpu->x;
+    SET_ZERO_NEGATIVE(cpu->a);
+    break;
+  case 0x98:
+    cpu->a = cpu->y;
+    SET_ZERO_NEGATIVE(cpu->a);
+    break;
+  case 0xBA:
+    cpu->x = cpu->sp;
+    SET_ZERO_NEGATIVE(cpu->x);
+    break;
+  case 0x9A:
+    cpu->sp = cpu->x;
+    break;
   default:
     printf("Unimplemented opcode: %02X\n", opcode);
     exit(1);
