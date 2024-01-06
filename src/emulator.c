@@ -23,8 +23,8 @@ static void load_rom(Emulator *emulator, char *filename) {
   mapper->prg_banks = emulator->header[4];
   mapper->chr_banks = emulator->header[5];
 
-  fread(mapper->prg_rom, 1, mapper->prg_rom_size, file);
-  fread(mapper->chr_rom, 1, mapper->chr_rom_size, file);
+  fread(mapper->prg_memory, 1, mapper->prg_rom_size, file);
+  fread(mapper->chr_memory, 1, mapper->chr_rom_size, file);
 
   fclose(file);
 }

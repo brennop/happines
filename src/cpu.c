@@ -52,14 +52,10 @@ void cpu_trace(Instruction instruction, uint16_t addr, uint8_t data,
 
 #define SET_ZERO_NEGATIVE(value)                                               \
   cpu_set_flag(cpu, FLAG_ZERO, value == 0x00);                                 \
-  cpu_set_flag(cpu, FLAG_NEGATIVE, value & 0x80);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, (value)&0x80);
 
-void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data) {
-  bus_write(cpu->bus, addr, data);
-}
-
-uint8_t cpu_bus_read(CPU *cpu, uint16_t addr, bool readonly) {
-  return bus_read(cpu->bus, addr, readonly);
+bool is_opcode_legal(uint8_t opcode) {
+  return instructions[opcode].mnemonic[0] != '?';
 }
 
 static inline void push(CPU *cpu, uint8_t data) {
@@ -88,12 +84,13 @@ static inline void adc(CPU *cpu, uint8_t data) {
   cpu->a = result & 0x00FF;
 }
 
-static inline void asl(CPU *cpu, uint8_t *ptr) {
-  uint16_t result = *ptr << 1;
-  *ptr = result & 0x00FF;
+static inline uint8_t asl(CPU *cpu, uint8_t data) {
+  uint16_t result = data << 1;
   cpu_set_flag(cpu, FLAG_CARRY, result & 0xFF00);
-  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
-  cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
+  cpu_set_flag(cpu, FLAG_ZERO, (result & 0x00FF) == 0);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
+
+  return result & 0x00FF;
 }
 
 /**
@@ -125,39 +122,34 @@ static inline void cmp(CPU *cpu, uint8_t source, uint8_t data) {
   cpu_set_flag(cpu, FLAG_CARRY, result <= 0xff);
 }
 
-static inline void inc(CPU *cpu, uint8_t *value, uint8_t ammount) {
-  (*value) += ammount;
-  cpu_set_flag(cpu, FLAG_NEGATIVE, *value & 0x80);
-  cpu_set_flag(cpu, FLAG_ZERO, *value == 0);
-}
-
 static inline void eor(CPU *cpu, uint8_t data) {
   cpu->a ^= data;
   cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
   cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0);
 }
 
-static inline void lsr(CPU *cpu, uint8_t *ptr) {
-  cpu_set_flag(cpu, FLAG_CARRY, *ptr & 0x1);
-  *ptr >>= 1;
+static inline uint8_t lsr(CPU *cpu, uint8_t data) {
+  uint8_t result = data >> 1;
+  cpu_set_flag(cpu, FLAG_CARRY, data & 0x1);
   cpu_set_flag(cpu, FLAG_NEGATIVE, false);
-  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
+  cpu_set_flag(cpu, FLAG_ZERO, result == 0x00);
+  return result;
 }
 
-static inline void rol(CPU *cpu, uint8_t *ptr) {
-  uint16_t result = *ptr << 1 | (cpu->status & 0x01);
-  *ptr = result;
+static inline uint8_t rol(CPU *cpu, uint8_t data) {
+  uint16_t result = data << 1 | (cpu->status & 0x01);
   cpu_set_flag(cpu, FLAG_CARRY, result & 0xFF00);
-  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
-  cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
+  cpu_set_flag(cpu, FLAG_ZERO, (result & 0x00FF) == 0x00);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
+  return result & 0x00FF;
 }
 
-static inline void ror(CPU *cpu, uint8_t *ptr) {
-  uint8_t result = *ptr >> 1 | (cpu->status << 7);
-  cpu_set_flag(cpu, FLAG_CARRY, *ptr & 0x1);
-  *ptr = result;
-  cpu_set_flag(cpu, FLAG_ZERO, *ptr == 0x00);
-  cpu_set_flag(cpu, FLAG_NEGATIVE, *ptr & 0x80);
+static inline uint8_t ror(CPU *cpu, uint8_t data) {
+  uint8_t result = data >> 1 | (cpu->status << 7);
+  cpu_set_flag(cpu, FLAG_CARRY, data & 0x1);
+  cpu_set_flag(cpu, FLAG_ZERO, result == 0x00);
+  cpu_set_flag(cpu, FLAG_NEGATIVE, result & 0x80);
+  return result;
 }
 
 static inline void rti(CPU *cpu) {
@@ -178,22 +170,22 @@ uint8_t cpu_step(CPU *cpu) {
   uint8_t opcode = bus_read(cpu->bus, cpu->pc, false);
   Instruction instruction = instructions[opcode];
 
-  uint8_t trace_pc = cpu->pc;
+  uint16_t trace_pc = cpu->pc;
 
-  cpu->pc++;
+  // hack to make compiler happy about unused variables
+  cpu->pc = trace_pc + 1;
+
   uint8_t cycles = instruction.cycles;
   uint8_t addressing_cycles = 0;
   uint8_t operation_cycles = 0;
 
   uint16_t addr = 0;
   uint8_t data;
-  uint8_t *ptr;
 
   // Addressing modes
   switch (instruction.addressing_mode) {
   case ADDR_MODE_IMP:
     data = cpu->a;
-    ptr = &cpu->a;
     break;
   case ADDR_MODE_IMM:
     addr = cpu->pc++;
@@ -277,15 +269,18 @@ uint8_t cpu_step(CPU *cpu) {
   }
 
   if (instruction.addressing_mode != ADDR_MODE_IMP) {
-    ptr = bus_get_ptr(cpu->bus, addr, false);
-    data = *ptr;
+    data = bus_read(cpu->bus, addr, false);
   }
 
-  cpu_trace(instruction, trace_pc, data, addr);
+  /* cpu_trace(instruction, trace_pc, data, addr); */
 
   switch (opcode) {
+  case 0xFA:
+  case 0xDA: // NOP
+    break;
   case CASE8_4(0x61):
     adc(cpu, data);
+    operation_cycles = 1;
     break;
   case CASE8_4(0x21):
     cpu->a &= data;
@@ -293,8 +288,11 @@ uint8_t cpu_step(CPU *cpu) {
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
     break;
-  case CASE5(0x06):
-    asl(cpu, ptr);
+  case 0x0A:
+    cpu->a = asl(cpu, cpu->a);
+    break;
+  case CASE4(0x06):
+    bus_write(cpu->bus, addr, asl(cpu, data));
     break;
   case VERT_8(0x10):
     if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
@@ -335,6 +333,9 @@ uint8_t cpu_step(CPU *cpu) {
   case 0xD8:
     cpu_set_flag(cpu, FLAG_DECIMAL_MODE, false);
     break;
+  case 0xF8:
+    cpu_set_flag(cpu, FLAG_DECIMAL_MODE, true);
+    break;
   case CASE8_4(0xC1): // CMP
     cmp(cpu, cpu->a, data);
     operation_cycles = 1;
@@ -352,32 +353,39 @@ uint8_t cpu_step(CPU *cpu) {
     operation_cycles = 1;
     break;
   case CASE4(0xC6):
-    inc(cpu, ptr, -1);
+    bus_write(cpu->bus, addr, data - 1);
+    SET_ZERO_NEGATIVE(data - 1);
     break;
   case 0xCA:
-    inc(cpu, &cpu->x, -1);
+    cpu->x--;
+    SET_ZERO_NEGATIVE(cpu->x);
     break;
   case 0x88:
-    inc(cpu, &cpu->y, -1);
+    cpu->y--;
+    SET_ZERO_NEGATIVE(cpu->y);
     break;
   case CASE8_4(0x41): // EOR
     eor(cpu, data);
     operation_cycles = 1;
     break;
-  case CASE4(0xE6):
-    inc(cpu, ptr, 1);
+  case CASE4(0xE6): // INC
+    bus_write(cpu->bus, addr, data + 1);
+    SET_ZERO_NEGATIVE((uint8_t)(data + 1));
     break;
   case 0xE8:
-    inc(cpu, &cpu->x, 1);
+    cpu->x++;
+    SET_ZERO_NEGATIVE(cpu->x);
     break;
   case 0xC8:
-    inc(cpu, &cpu->y, 1);
+    cpu->y++;
+    SET_ZERO_NEGATIVE(cpu->y);
     break;
   case 0x4C:
   case 0x6C:
     cpu->pc = addr;
     break;
   case 0x20: // JSR
+    cpu->pc--;
     push(cpu, (cpu->pc >> 8) & 0x00FF);
     push(cpu, cpu->pc & 0x00FF);
     cpu->pc = addr;
@@ -399,8 +407,11 @@ uint8_t cpu_step(CPU *cpu) {
     SET_ZERO_NEGATIVE(cpu->y);
     operation_cycles = 1;
     break;
-  case CASE5(0x46):
-    lsr(cpu, ptr);
+  case CASE4(0x46):
+    bus_write(cpu->bus, addr, lsr(cpu, data));
+    break;
+  case 0x4A:
+    cpu->a = lsr(cpu, cpu->a);
     break;
   case 0xEA:
     break;
@@ -422,11 +433,17 @@ uint8_t cpu_step(CPU *cpu) {
   case 0x28: // PLP
     cpu->status = pop(cpu) & ~(FLAG_UNUSED | FLAG_BREAK);
     break;
-  case CASE5(0x26):
-    rol(cpu, ptr);
+  case CASE4(0x26):
+    bus_write(cpu->bus, addr, rol(cpu, data));
     break;
-  case CASE5(0x66):
-    ror(cpu, ptr);
+  case 0x2A:
+    cpu->a = rol(cpu, cpu->a);
+    break;
+  case CASE4(0x66):
+    bus_write(cpu->bus, addr, ror(cpu, data));
+    break;
+  case 0x6A:
+    cpu->a = ror(cpu, cpu->a);
     break;
   case 0x40:
     rti(cpu);
@@ -439,8 +456,10 @@ uint8_t cpu_step(CPU *cpu) {
     break;
   case CASE4(0x86):
     bus_write(cpu->bus, addr, cpu->x);
+    break;
   case CASE4(0x84):
     bus_write(cpu->bus, addr, cpu->y);
+    break;
   case 0xAA:
     cpu->x = cpu->a;
     SET_ZERO_NEGATIVE(cpu->x);

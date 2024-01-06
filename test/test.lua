@@ -5,6 +5,9 @@ local bor, band, bxor, lshift, rshift = bit.bor, bit.band, bit.bxor, bit.lshift,
 
 local lib = ffi.load("lib/libhappines.so")
 
+local n_tests = tonumber(arg[2]) or 100
+local opcode
+
 local function load_header(name)
   local file = io.open("include/" .. name .. ".h", "r")
   local data = ""
@@ -41,10 +44,12 @@ local function load_test()
 end
 
 local function run_test(test, cpu)
+  local mapper = cpu.bus.mapper
+
   for _, v in ipairs(test.initial.ram) do
     address, value = unpack(v)
     address, value = tonumber(address), tonumber(value)
-    lib.cpu_bus_write(cpu, address, value)
+    mapper.ram[address] = value
   end
 
   -- set registers
@@ -64,13 +69,13 @@ local function run_test(test, cpu)
     local message = [[
 
     TEST FAILED
-      test: %s
+      test: %s (%s)
       register: %s
       expected: 0x%04x
       actual: 0x%04x
     ]]
 
-    assert(actual == expected, message:format(test.name, name, expected, actual))
+    assert(actual == expected, message:format(test.name, opcode, name, expected, actual))
   end
 
   local function assert_flag(offset, name)
@@ -81,13 +86,13 @@ local function run_test(test, cpu)
     local message = [[
 
     TEST FAILED
-      test: %s
+      test: %s (%s)
       flag: %s
       expected: 0x%04x
       actual: 0x%04x
     ]]
 
-    assert(actual == expected, message:format(test.name, name, expected, actual))
+    assert(actual == expected, message:format(test.name, opcode, name, expected, actual))
   end
 
   -- check registers
@@ -110,23 +115,23 @@ local function run_test(test, cpu)
     address, value = unpack(v)
     address, value = tonumber(address), tonumber(value)
 
-    local actual = lib.cpu_bus_read(cpu, address, false)
+    local actual = mapper.ram[address]
 
     local message = [[
 
     TEST FAILED
-      test: %s
+      test: %s (%s)
       address: 0x%04x
       expected: 0x%04x
       actual: 0x%04x
     ]]
 
-    assert(actual == value, message:format(test.name, address, value, actual))
+    assert(actual == value, message:format(test.name, opcode, address, value, actual))
   end
 
   local message = [[
   TEST FAILED
-    test: %s
+    test: %s (%s)
     innacurate cycles
     expected: %d
     actual: %d
@@ -134,34 +139,33 @@ local function run_test(test, cpu)
 
   -- check cycles
   expected_cycles = #test.cycles
-  assert(expected_cycles == cycles, message:format(test.name, expected_cycles, cycles))
+  assert(expected_cycles == cycles, message:format(test.name, opcode, expected_cycles, cycles))
 end
 
 local function run_tests(tests, cpu)
   local errors = 0
-  for i = 1, 10000 do
+  for i = 1, n_tests do
     local test = tests[i]
 
-    local ok, err = pcall(run_test, test, cpu)
-
-    if not ok then
-      print(err)
-      errors = errors + 1
-    end
-
-    if errors > 100 then
-      print("stopping, too many errors")
-      break
-    end
+    run_test(test, cpu)
   end
 
-  print(string.format("Passing: %d/%d", 10000 - errors, 10000))
+  print(string.format("Passing: %d/%d", n_tests - errors, n_tests))
 end
 
 local function main()
   def_header("mapper")
   def_header("bus")
   def_header("cpu")
+
+  local filename = arg[1]
+  opcode = filename:match("([%x]+).json")
+  local is_legal = lib.is_opcode_legal(tonumber(opcode, 16))
+
+  if not is_legal then
+    print("illegal opcode " .. opcode)
+    return
+  end
 
   local tests = load_test()
   local cpu = load_cpu()

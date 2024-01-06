@@ -36,7 +36,6 @@ void cpu_irq(CPU *cpu);
 void cpu_nmi(CPU *cpu);
 
 // library functions
-extern void cpu_bus_write(CPU *cpu, uint16_t addr, uint8_t data);
-extern uint8_t cpu_bus_read(CPU *cpu, uint16_t addr, bool readonly);
+extern bool is_opcode_legal(uint8_t opcode);
 
 #endif // __CPU_H__
