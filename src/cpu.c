@@ -6,8 +6,9 @@
 
 const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
 
-void cpu_trace(Instruction instruction, uint16_t addr, uint8_t data) {
-  printf("0x%04X: %s %02X \n", addr, instruction.mnemonic, data);
+void cpu_trace(Instruction instruction, uint16_t addr, uint8_t data,
+               uint16_t addr2) {
+  printf("0x%04X: %s %02X (0x%04X)\n", addr, instruction.mnemonic, data, addr2);
 }
 
 #define CASE8_4(x)                                                             \
@@ -177,12 +178,14 @@ uint8_t cpu_step(CPU *cpu) {
   uint8_t opcode = bus_read(cpu->bus, cpu->pc, false);
   Instruction instruction = instructions[opcode];
 
+  uint8_t trace_pc = cpu->pc;
+
   cpu->pc++;
   uint8_t cycles = instruction.cycles;
   uint8_t addressing_cycles = 0;
   uint8_t operation_cycles = 0;
 
-  uint16_t addr;
+  uint16_t addr = 0;
   uint8_t data;
   uint8_t *ptr;
 
@@ -278,7 +281,7 @@ uint8_t cpu_step(CPU *cpu) {
     data = *ptr;
   }
 
-  /* cpu_trace(instruction, cpu->pc, data); */
+  cpu_trace(instruction, trace_pc, data, addr);
 
   switch (opcode) {
   case CASE8_4(0x61):
@@ -328,6 +331,9 @@ uint8_t cpu_step(CPU *cpu) {
     break;
   case 0xB8:
     cpu_set_flag(cpu, FLAG_OVERFLOW, false);
+    break;
+  case 0xD8:
+    cpu_set_flag(cpu, FLAG_DECIMAL_MODE, false);
     break;
   case CASE8_4(0xC1): // CMP
     cmp(cpu, cpu->a, data);

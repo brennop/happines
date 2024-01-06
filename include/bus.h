@@ -4,13 +4,14 @@
 #include "common.h"
 #include "mapper.h"
 
+typedef struct PPU PPU;
+
 typedef struct {
   // 2KB of CPU RAM
   uint8_t ram[2048];
-  // 2KB of PPU RAM
-  uint8_t ppu_ram[2048];
 
   Mapper mapper;
+  PPU *ppu;
 } Bus;
 
 void bus_init(Bus *bus);

@@ -13,7 +13,10 @@ const uint32_t palette[] = {
     0xffc7c9ff, 0xffcdaaff, 0xefd696ff, 0xd0e095ff, 0xb3e7a5ff, 0x9feac3ff,
     0x9ae8e6ff, 0xafafafff, 0x000000ff, 0x000000ff};
 
-void ppu_init(PPU *ppu, Bus *bus) { ppu->bus = bus; }
+void ppu_init(PPU *ppu, Bus *bus) {
+  ppu->bus = bus;
+  bus->ppu = ppu;
+}
 
 void ppu_step(PPU *ppu) {
   ppu->cycle++;
@@ -27,4 +30,27 @@ void ppu_step(PPU *ppu) {
       ppu->frame_complete = true;
     }
   }
+}
+
+uint32_t *ppu_get_pattern_table(PPU *ppu, int i) {
+  for (int y = 0; y < 16; y++) {
+    for (int x = 0; x < 16; x++) {
+      int offset = (y * 16 + x) * 16;
+
+      for (int row = 0; row < 8; row++) {
+        uint8_t lsb = ppu->bus->read(0x0000 + i * 0x1000 + offset + row);
+        uint8_t msb = ppu->bus->read(0x0000 + i * 0x1000 + offset + row + 8);
+
+        for (int col = 0; col < 8; col++) {
+          uint8_t pixel = ((msb & 0x01) << 1) | (lsb & 0x01);
+          lsb >>= 1;
+          msb >>= 1;
+
+          ppu->pattern_table[i][offset + row * 8 + (7 - col)] = palette[pixel];
+        }
+      }
+    }
+  }
+
+  return ppu->pattern_table[i];
 }
