@@ -3,13 +3,16 @@
 
 #include <stdio.h>
 
-void bus_init(Bus *bus) {
+void bus_init(Bus *bus, Mapper *mapper, PPU *ppu) {
   // reset ram
+
+  bus->mapper = mapper;
+  bus->ppu = ppu;
 }
 
 inline uint8_t bus_read(Bus *bus, uint16_t addr, bool read_only) {
-  if (bus->mapper.prg_read(&bus->mapper, addr)) {
-    return *bus->mapper.prg_read(&bus->mapper, addr);
+  if (bus->mapper->prg_read(bus->mapper, addr)) {
+    return *bus->mapper->prg_read(bus->mapper, addr);
   } else if (addr >= 0x0000 && addr <= 0x1FFF) {
     return bus->ram[addr & 0x7FFF];
   } else if (addr >= 0x2000 && addr <= 0x3FFF) {
@@ -21,7 +24,7 @@ inline uint8_t bus_read(Bus *bus, uint16_t addr, bool read_only) {
 }
 
 void bus_write(Bus *bus, uint16_t addr, uint8_t data) {
-  if (bus->mapper.prg_write(&bus->mapper, addr, data)) {
+  if (bus->mapper->prg_write(bus->mapper, addr, data)) {
     return;
   } else if (addr >= 0x0000 && addr <= 0x1FFF) {
     bus->ram[addr & 0x7FFF] = data;

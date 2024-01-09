@@ -14,6 +14,7 @@ typedef struct {
   Bus bus;
   CPU cpu;
   PPU ppu;
+  Mapper mapper;
 
   /**
    * Cartridge

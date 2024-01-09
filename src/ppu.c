@@ -13,10 +13,54 @@ const uint32_t palette[] = {
     0xffc7c9ff, 0xffcdaaff, 0xefd696ff, 0xd0e095ff, 0xb3e7a5ff, 0x9feac3ff,
     0x9ae8e6ff, 0xafafafff, 0x000000ff, 0x000000ff};
 
-void ppu_init(PPU *ppu, Bus *bus) {
-  ppu->bus = bus;
-  bus->ppu = ppu;
+uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
+  uint8_t *mapper_data = ppu->mapper->chr_read(ppu->mapper, addr);
+
+  if (mapper_data) {
+    return *mapper_data;
+  } else if (addr >= 0x0000 && addr <= 0x1FFF) { // pattern table
+    return ppu->raw_pattern_table[(addr & 0x1000) >> 12][addr & 0x0FFF];
+  } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
+  } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
+    addr &= 0x001F;
+
+    if (addr == 0x0010)
+      addr = 0x0000;
+    else if (addr == 0x0014)
+      addr = 0x0004;
+    else if (addr == 0x0018)
+      addr = 0x0008;
+    else if (addr == 0x001C)
+      addr = 0x000C;
+
+    return ppu->palette[addr];
+  }
+
+  return 0;
 }
+
+void ppu_write(PPU *ppu, uint16_t addr, uint8_t data) {
+  if (ppu->mapper->chr_write(ppu->mapper, addr, data)) {
+  } else if (addr >= 0x0000 && addr <= 0x1FFF) { // pattern table
+    ppu->raw_pattern_table[(addr & 0x1000) >> 12][addr & 0x0FFF] = data;
+  } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
+  } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
+    addr &= 0x001F;
+
+    if (addr == 0x0010)
+      addr = 0x0000;
+    else if (addr == 0x0014)
+      addr = 0x0004;
+    else if (addr == 0x0018)
+      addr = 0x0008;
+    else if (addr == 0x001C)
+      addr = 0x000C;
+
+    ppu->palette[addr] = data;
+  }
+}
+
+void ppu_init(PPU *ppu, Mapper *mapper) { ppu->mapper = mapper; }
 
 void ppu_step(PPU *ppu) {
   ppu->cycle++;
@@ -32,24 +76,39 @@ void ppu_step(PPU *ppu) {
   }
 }
 
-uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
-  return 0;
+uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) { return 0; }
+
+void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {}
+
+static inline uint32_t ppu_get_color(PPU *ppu, uint8_t palette_id,
+                                     uint8_t pixel) {
+  return palette[ppu_read(ppu, 0x3F00 + (palette_id << 2) + pixel, false)];
 }
 
-void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
-}
-
-
-uint32_t *ppu_get_pattern_table(PPU *ppu, int i) {
+uint32_t *ppu_get_pattern_table(PPU *ppu, uint8_t i, uint8_t palette) {
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
-      /* int offset = (y * 16 + x) * 16; */
+      int offset = (y * 16 + x) * 16;
 
       for (int row = 0; row < 8; row++) {
+        // read from the pattern table
+        uint8_t tile_lsb = ppu_read(ppu, i * 0x1000 + offset + row, false);
+        uint8_t tile_msb = ppu_read(ppu, i * 0x1000 + offset + row + 8, false);
+
+        for (int col = 0; col < 8; col++) {
+          uint8_t pixel = (tile_lsb & 0x01) + (tile_msb & 0x01);
+          // FIXME: no mutation
+          tile_lsb >>= 1;
+          tile_msb >>= 1;
+
+          uint8_t pixel_x = x * 8 + (7 - col);
+          uint8_t pixel_y = y * 8 + row;
+          uint8_t index = pixel_y * 128 + pixel_x;
+          ppu->pattern_table[i][index] = ppu_get_color(ppu, palette, pixel);
+        }
       }
     }
   }
 
   return ppu->pattern_table[i];
 }
-
