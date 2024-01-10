@@ -1,17 +1,18 @@
 #include "ppu.h"
+#include <stdio.h>
 
 const uint32_t palette[] = {
-    0x555555ff, 0x001773ff, 0x000786ff, 0x2e0578ff, 0x59024dff, 0x720011ff,
-    0x6e0000ff, 0x4c0800ff, 0x171b00ff, 0x002a00ff, 0x003100ff, 0x002e08ff,
-    0x002645ff, 0x000000ff, 0x000000ff, 0x000000ff, 0xa5a5a5ff, 0x0057c6ff,
-    0x223fe5ff, 0x6e28d9ff, 0xae1aa6ff, 0xd21759ff, 0xd12107ff, 0xa73700ff,
-    0x635100ff, 0x186700ff, 0x007200ff, 0x007331ff, 0x006a84ff, 0x000000ff,
-    0x000000ff, 0x000000ff, 0xfeffffff, 0x2fa8ffff, 0x5d81ffff, 0x9c70ffff,
-    0xf772ffff, 0xff77bdff, 0xff7e75ff, 0xff8a2bff, 0xcda000ff, 0x81b802ff,
-    0x3dc830ff, 0x12cd7bff, 0x0dc5d0ff, 0x3c3c3cff, 0x000000ff, 0x000000ff,
-    0xfeffffff, 0xa4deffff, 0xb1c8ffff, 0xccbeffff, 0xf4c2ffff, 0xffc5eaff,
-    0xffc7c9ff, 0xffcdaaff, 0xefd696ff, 0xd0e095ff, 0xb3e7a5ff, 0x9feac3ff,
-    0x9ae8e6ff, 0xafafafff, 0x000000ff, 0x000000ff};
+    0xff555555, 0xff731700, 0xff860700, 0xff78052e, 0xff4d0259, 0xff110072,
+    0xff00006e, 0xff00084c, 0xff001b17, 0xff002a00, 0xff003100, 0xff082e00,
+    0xff452600, 0xff000000, 0xff000000, 0xff000000, 0xffa5a5a5, 0xffc65700,
+    0xffe53f22, 0xffd9286e, 0xffa61aae, 0xff5917d2, 0xff0721d1, 0xff0037a7,
+    0xff005163, 0xff006718, 0xff007200, 0xff317300, 0xff846a00, 0xff000000,
+    0xff000000, 0xff000000, 0xfffffffe, 0xffffa82f, 0xffff815d, 0xffff709c,
+    0xffff72f7, 0xffbd77ff, 0xff757eff, 0xff2b8aff, 0xff00a0cd, 0xff02b881,
+    0xff30c83d, 0xff7bcd12, 0xffd0c50d, 0xff3c3c3c, 0xff000000, 0xff000000,
+    0xfffffffe, 0xffffdea4, 0xffffc8b1, 0xffffbecc, 0xffffc2f4, 0xffeac5ff,
+    0xffc9c7ff, 0xffaacdff, 0xff96d6ef, 0xff95e0d0, 0xffa5e7b3, 0xffc3ea9f,
+    0xffe6e89a, 0xffafafaf, 0xff000000, 0xff000000};
 
 uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
   uint8_t *mapper_data = ppu->mapper->chr_read(ppu->mapper, addr);
@@ -76,9 +77,56 @@ void ppu_step(PPU *ppu) {
   }
 }
 
-uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) { return 0; }
+uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
+  uint8_t data = 0x00;
+  switch (addr) {
+  case 2:
+    data = (ppu->status.reg & 0xE0) | (ppu->ppu_data_buffer & 0x1F);
+    ppu->status.vertical_blank = 1;
+    ppu->address_latch = 0;
+    break;
+  case 7: // PPU Data
+    data = ppu->ppu_data_buffer;
+    ppu->ppu_data_buffer = ppu_read(ppu, ppu->ppu_addr, readonly);
 
-void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {}
+    // palette read is not delayed
+    if (ppu->ppu_addr >= 0x3F00) {
+      data = ppu->ppu_data_buffer;
+    }
+
+    ppu->ppu_addr += 1;
+    /* if (ppu->control.increment_mode == 0) { */
+    /* } else { */
+    /*   ppu->ppu_addr += 32; */
+    /* } */
+
+    break;
+  }
+
+  return data;
+}
+
+void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
+  switch (addr) {
+  case 0:
+    ppu->control.reg = data;
+    break;
+  case 1:
+    ppu->mask.reg = data;
+    break;
+  case 6: // PPU Address
+    if (ppu->address_latch == 0) {
+      ppu->ppu_addr = (ppu->ppu_addr & 0x00FF) | (data << 8);
+      ppu->address_latch = 1;
+    } else {
+      ppu->ppu_addr = (ppu->ppu_addr & 0xFF00) | data;
+      ppu->address_latch = 0;
+    }
+
+    ppu->ppu_addr += 1;
+    break;
+  }
+}
 
 static inline uint32_t ppu_get_color(PPU *ppu, uint8_t palette_id,
                                      uint8_t pixel) {
@@ -88,7 +136,7 @@ static inline uint32_t ppu_get_color(PPU *ppu, uint8_t palette_id,
 uint32_t *ppu_get_pattern_table(PPU *ppu, uint8_t i, uint8_t palette) {
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
-      int offset = (y * 16 + x) * 16;
+      int offset = y * 256 + x * 16;
 
       for (int row = 0; row < 8; row++) {
         // read from the pattern table
@@ -101,9 +149,13 @@ uint32_t *ppu_get_pattern_table(PPU *ppu, uint8_t i, uint8_t palette) {
           tile_lsb >>= 1;
           tile_msb >>= 1;
 
-          uint8_t pixel_x = x * 8 + (7 - col);
-          uint8_t pixel_y = y * 8 + row;
-          uint8_t index = pixel_y * 128 + pixel_x;
+          if (pixel == 0) {
+            continue;
+          }
+
+          int pixel_x = x * 8 + (7 - col);
+          int pixel_y = y * 8 + row;
+          int index = pixel_y * 128 + pixel_x;
           ppu->pattern_table[i][index] = ppu_get_color(ppu, palette, pixel);
         }
       }

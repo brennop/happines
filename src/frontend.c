@@ -1,4 +1,5 @@
 #include "frontend.h"
+#include "ppu.h"
 
 #include <SDL2/SDL.h>
 
@@ -58,11 +59,15 @@ void frontend_update(Frontend *frontend, Emulator *emulator) {
   SDL_Rect rect;
   rect.x = 0;
   rect.y = 0;
-  rect.w = WIDTH * SCALE;
-  rect.h = HEIGHT * SCALE;
+  rect.w = 128 * SCALE;
+  rect.h = 128 * SCALE;
 
-  SDL_UpdateTexture(frontend->texture, NULL, emulator->ppu.framebuffer,
-                    WIDTH * sizeof(uint32_t));
+  /* SDL_UpdateTexture(frontend->texture, NULL, emulator->ppu.framebuffer, */
+  /*                   WIDTH * sizeof(uint32_t)); */
+  /* SDL_RenderCopy(frontend->renderer, frontend->texture, NULL, &rect); */
+
+  SDL_UpdateTexture(frontend->texture, NULL, ppu_get_pattern_table(&emulator->ppu, 0, 0),
+                    128 * sizeof(uint32_t));
   SDL_RenderCopy(frontend->renderer, frontend->texture, NULL, &rect);
 
   SDL_RenderPresent(frontend->renderer);

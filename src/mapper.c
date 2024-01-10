@@ -49,6 +49,8 @@ void mapper_init(Mapper *mapper, uint32_t mapper_id) {
   if (mapper_id == 0) {
     mapper->prg_read = mapper_000_prg_read;
     mapper->prg_write = mapper_000_prg_write;
+    mapper->chr_read = mapper_000_chr_read;
+    mapper->chr_write = mapper_000_chr_write;
   } else if (mapper_id == 0xffffffff) {
     mapper->prg_read = mapper_test_read;
     mapper->prg_write = mapper_test_write;

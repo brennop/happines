@@ -1,8 +1,7 @@
 #include "emulator.h"
 
 #include <stdio.h>
-
-#include <time.h>
+#include <unistd.h>
 
 static void load_rom(Emulator *emulator, char *filename) {
   FILE *file = fopen(filename, "rb");
@@ -48,9 +47,6 @@ void emulator_step(Emulator *emulator) {
     }
 
     emulator->cycles++;
-
-    // sleep for 10ms
-    nanosleep((const struct timespec[]){{0, 10000000L}}, NULL);
   }
 
   emulator->ppu.frame_complete = false;
