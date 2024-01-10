@@ -28,12 +28,11 @@ uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
   if (mapper_data) {
     return *mapper_data;
   } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
-    uint16_t mirror_addr = (addr - 0x2000) & 0x0FFF;
-    uint16_t table = mirror_addr >> 10;
-    uint16_t offset = mirror_addr & 0x03FF;
-    uint16_t index = mirror_lookup[ppu->mirroring][table] * 0x0400 + offset;
-    uint8_t *nametable = ppu->raw_nametable[index];
-    return nametable[offset];
+    int mirror_addr = (addr - 0x2000) % 0x1000;
+    uint8_t table = mirror_addr / 0x0400;
+    int offset = mirror_addr % 0x0400;
+    uint16_t index = mirror_lookup[ppu->mirroring][table] * 0x0400 + offset + 0x2000;
+    return ppu->raw_nametable[index % 2048];
   } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
     addr &= 0x001F;
 
@@ -55,12 +54,11 @@ uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
 void ppu_write(PPU *ppu, uint16_t addr, uint8_t data) {
   if (ppu->mapper->chr_write(ppu->mapper, addr, data)) {
   } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
-    uint16_t mirror_addr = (addr - 0x2000) & 0x0FFF;
-    uint16_t table = mirror_addr >> 10;
-    uint16_t offset = mirror_addr & 0x03FF;
-    uint16_t index = mirror_lookup[ppu->mirroring][table] * 0x0400 + offset;
-    uint8_t *nametable = ppu->raw_nametable[index];
-    nametable[offset] = data;
+    int mirror_addr = (addr - 0x2000) % 0x1000;
+    uint8_t table = mirror_addr / 0x0400;
+    int offset = mirror_addr % 0x0400;
+    uint16_t index = mirror_lookup[ppu->mirroring][table] * 0x0400 + offset + 0x2000;
+    ppu->raw_nametable[index % 2048] = data;
   } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
     addr &= 0x001F;
 
@@ -318,7 +316,7 @@ void ppu_step(PPU *ppu) {
   }
 
   // boundary check
-  if (ppu->scanline < 240 && ppu->cycle < 256) {
+  if (ppu->scanline >= 0 && ppu->scanline < 240 && ppu->cycle < 256) {
     int pixel_index = ppu->scanline * 256 + ppu->cycle - 1;
     ppu->framebuffer[pixel_index] = ppu_get_color(ppu, bg_palette, bg_pixel);
   }

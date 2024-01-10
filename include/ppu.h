@@ -19,7 +19,7 @@ typedef union {
 } PPUAddress;
 
 struct PPU {
-  uint8_t raw_nametable[2][1024];
+  uint8_t raw_nametable[2 * 1024];
   uint8_t palette[32];
 
   uint32_t framebuffer[256 * 240];
