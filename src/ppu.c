@@ -61,28 +61,12 @@ void ppu_write(PPU *ppu, uint16_t addr, uint8_t data) {
   }
 }
 
-void ppu_init(PPU *ppu, Mapper *mapper) { ppu->mapper = mapper; }
-
-void ppu_step(PPU *ppu) {
-  ppu->cycle++;
-
-  if (ppu->cycle >= 341) {
-    ppu->cycle = 0;
-    ppu->scanline++;
-
-    if (ppu->scanline == 261) {
-      ppu->scanline = -1;
-      ppu->frame_complete = true;
-    }
-  }
-}
-
 uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
   uint8_t data = 0x00;
   switch (addr) {
   case 2:
     data = (ppu->status.reg & 0xE0) | (ppu->ppu_data_buffer & 0x1F);
-    ppu->status.vertical_blank = 1;
+    ppu->status.vertical_blank = 0;
     ppu->address_latch = 0;
     break;
   case 7: // PPU Data
@@ -125,8 +109,44 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
 
     ppu->ppu_addr += 1;
     break;
+  case 7: // PPU Data
+    ppu_write(ppu, ppu->ppu_addr, data);
+    ppu->ppu_addr += 1;
+
+    break;
   }
 }
+
+void ppu_init(PPU *ppu, Mapper *mapper) { ppu->mapper = mapper; }
+
+void ppu_step(PPU *ppu) {
+  if (ppu->scanline == -1 && ppu->cycle == 1) {
+    ppu->status.vertical_blank = 0;
+    ppu->status.sprite_overflow = 0;
+    ppu->status.sprite_zero_hit = 0;
+  }
+
+  if (ppu->scanline == 241 && ppu->cycle == 1) {
+    ppu->status.vertical_blank = 1;
+
+    if (ppu->control.enable_nmi) {
+      ppu->nmi = true;
+    }
+  }
+
+  ppu->cycle++;
+
+  if (ppu->cycle >= 341) {
+    ppu->cycle = 0;
+    ppu->scanline++;
+
+    if (ppu->scanline == 261) {
+      ppu->scanline = -1;
+      ppu->frame_complete = true;
+    }
+  }
+}
+
 
 static inline uint32_t ppu_get_color(PPU *ppu, uint8_t palette_id,
                                      uint8_t pixel) {
@@ -148,10 +168,6 @@ uint32_t *ppu_get_pattern_table(PPU *ppu, uint8_t i, uint8_t palette) {
           // FIXME: no mutation
           tile_lsb >>= 1;
           tile_msb >>= 1;
-
-          if (pixel == 0) {
-            continue;
-          }
 
           int pixel_x = x * 8 + (7 - col);
           int pixel_y = y * 8 + row;

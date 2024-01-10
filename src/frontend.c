@@ -6,7 +6,7 @@
 void frontend_draw_tiles(Frontend *frontend, uint8_t *mem);
 void frontend_draw_sprites(Frontend *frontend, uint8_t *mem);
 
-#define SCALE 4
+#define SCALE 2
 #define WIDTH 256
 #define HEIGHT 240
 
@@ -16,23 +16,31 @@ void frontend_init(Frontend *frontend) {
     SDL_Quit();
   }
 
-  SDL_Window *window =
-      SDL_CreateWindow("leekboy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * SCALE,
-                       144 * SCALE, SDL_WINDOW_SHOWN);
+  SDL_Window *window = SDL_CreateWindow(
+      "leekboy", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+      256 * SCALE + 128 * SCALE, (128 + 128) * SCALE, SDL_WINDOW_SHOWN);
 
   if (window == NULL) {
     printf("Window creation failed: %s\n", SDL_GetError());
     SDL_Quit();
   }
 
-  SDL_Renderer *renderer =
-      SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  SDL_Renderer *renderer = SDL_CreateRenderer(
+      window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-  SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                                           SDL_TEXTUREACCESS_STREAMING, 160, 144);
+  SDL_Texture *texture = SDL_CreateTexture(
+      renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 256, 240);
+
+  SDL_Texture *pattern_table_1 = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                                   SDL_TEXTUREACCESS_STREAMING, 128, 128);
+  SDL_Texture *pattern_table_2 = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                                   SDL_TEXTUREACCESS_STREAMING, 128, 128);
 
   frontend->renderer = renderer;
   frontend->texture = texture;
+
+  frontend->pattern_table_textures[0] = pattern_table_1;
+  frontend->pattern_table_textures[1] = pattern_table_2;
 }
 
 void frontend_update(Frontend *frontend, Emulator *emulator) {
@@ -59,16 +67,37 @@ void frontend_update(Frontend *frontend, Emulator *emulator) {
   SDL_Rect rect;
   rect.x = 0;
   rect.y = 0;
-  rect.w = 128 * SCALE;
-  rect.h = 128 * SCALE;
+  rect.w = WIDTH * 2;
+  rect.h = HEIGHT * 2;
 
-  /* SDL_UpdateTexture(frontend->texture, NULL, emulator->ppu.framebuffer, */
-  /*                   WIDTH * sizeof(uint32_t)); */
-  /* SDL_RenderCopy(frontend->renderer, frontend->texture, NULL, &rect); */
-
-  SDL_UpdateTexture(frontend->texture, NULL, ppu_get_pattern_table(&emulator->ppu, 0, 0),
-                    128 * sizeof(uint32_t));
+  SDL_UpdateTexture(frontend->texture, NULL, emulator->ppu.framebuffer,
+                    WIDTH * sizeof(uint32_t));
   SDL_RenderCopy(frontend->renderer, frontend->texture, NULL, &rect);
+
+  // Debug
+  SDL_Rect pattern_table_1;
+  pattern_table_1.x = rect.w;
+  pattern_table_1.y = 0;
+  pattern_table_1.w = 128 * 2;
+  pattern_table_1.h = 128 * 2;
+
+  SDL_Rect pattern_table_2;
+  pattern_table_2.x = rect.w;
+  pattern_table_2.y = pattern_table_1.h;
+  pattern_table_2.w = 128 * 2;
+  pattern_table_2.h = 128 * 2;
+
+  SDL_UpdateTexture(frontend->pattern_table_textures[0], NULL,
+                    ppu_get_pattern_table(&emulator->ppu, 0, 0),
+                    128 * sizeof(uint32_t));
+  SDL_RenderCopy(frontend->renderer, frontend->pattern_table_textures[0], NULL,
+                 &pattern_table_1);
+
+  SDL_UpdateTexture(frontend->pattern_table_textures[1], NULL,
+                    ppu_get_pattern_table(&emulator->ppu, 1, 0),
+                    128 * sizeof(uint32_t));
+  SDL_RenderCopy(frontend->renderer, frontend->pattern_table_textures[1], NULL,
+                 &pattern_table_2);
 
   SDL_RenderPresent(frontend->renderer);
 }

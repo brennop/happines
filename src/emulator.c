@@ -31,7 +31,8 @@ void emulator_init(Emulator *emulator, char *filename) {
   load_rom(emulator, filename);
 
   // get mapper number
-  uint32_t mapper_id = (emulator->header[7] & 0xF0) | (emulator->header[6] >> 4);
+  uint32_t mapper_id =
+      (emulator->header[7] & 0xF0) | (emulator->header[6] >> 4);
 
   mapper_init(&emulator->mapper, mapper_id);
   bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu);
@@ -42,8 +43,14 @@ void emulator_init(Emulator *emulator, char *filename) {
 void emulator_step(Emulator *emulator) {
   while (emulator->ppu.frame_complete == false) {
     ppu_step(&emulator->ppu);
+
     if (emulator->cycles % 3 == 0) {
       cpu_step(&emulator->cpu);
+    }
+
+    if (emulator->ppu.nmi) {
+      emulator->ppu.nmi = false;
+      cpu_nmi(&emulator->cpu);
     }
 
     emulator->cycles++;

@@ -16,7 +16,8 @@ struct PPU {
 
   uint8_t frame_complete;
   uint16_t cycle;
-  uint16_t scanline;
+  int scanline;
+  uint8_t nmi;
 
   // Registers
   union {

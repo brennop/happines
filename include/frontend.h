@@ -7,6 +7,9 @@
 typedef struct {
   void *renderer;
   void *texture;
+
+  // debug
+  void *pattern_table_textures[2];
 } Frontend;
 
 void frontend_init(Frontend *frontend);
