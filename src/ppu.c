@@ -99,11 +99,7 @@ uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
       data = ppu->ppu_data_buffer;
     }
 
-    ppu->vram_addr.reg += 1;
-    /* if (ppu->control.increment_mode == 0) { */
-    /* } else { */
-    /*   ppu->vram_addr.reg += 32; */
-    /* } */
+    ppu->vram_addr.reg += ppu->control.increment_mode ? 32 : 1;
 
     break;
   }
@@ -133,7 +129,7 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
     }
   case 6: // PPU Address
     if (ppu->address_latch == 0) {
-      ppu->tram_addr.reg = (ppu->tram_addr.reg & 0x00FF) | (data << 8);
+      ppu->tram_addr.reg = (ppu->tram_addr.reg & 0x00FF) | (uint16_t)((data & 0x3F) << 8);
       ppu->address_latch = 1;
     } else {
       ppu->tram_addr.reg = (ppu->tram_addr.reg & 0xFF00) | data;
@@ -248,8 +244,16 @@ void ppu_step(PPU *ppu) {
                          (ppu->vram_addr.nametable_x << 10) |
                          ((ppu->vram_addr.coarse_y >> 2) << 3) |
                          (ppu->vram_addr.coarse_x >> 2),
-                     false) &
-            0x03;
+                     false);
+        if (ppu->vram_addr.coarse_y & 0x02) {
+          ppu->bg_next_tile_attrib >>= 4;
+        }
+
+        if (ppu->vram_addr.coarse_x & 0x02) {
+          ppu->bg_next_tile_attrib >>= 2;
+        }
+
+        ppu->bg_next_tile_attrib &= 0x03;
 
       case 4:
         ppu->bg_next_tile_lsb =
@@ -313,8 +317,11 @@ void ppu_step(PPU *ppu) {
     bg_palette = (bg_pal1 << 1) | bg_pal0;
   }
 
-  int pixel_index = ppu->scanline * 256 + ppu->cycle - 1;
-  ppu->framebuffer[pixel_index] = ppu_get_color(ppu, bg_palette, bg_pixel);
+  // boundary check
+  if (ppu->scanline < 240 && ppu->cycle < 256) {
+    int pixel_index = ppu->scanline * 256 + ppu->cycle - 1;
+    ppu->framebuffer[pixel_index] = ppu_get_color(ppu, bg_palette, bg_pixel);
+  }
 
   ppu->cycle++;
 
