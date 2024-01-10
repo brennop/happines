@@ -5,10 +5,22 @@
 #include "common.h"
 #include "mapper.h"
 
+typedef union {
+  struct {
+    uint16_t coarse_x : 5;
+    uint16_t coarse_y : 5;
+    uint16_t nametable_x : 1;
+    uint16_t nametable_y : 1;
+    uint16_t fine_y : 3;
+    uint16_t unused : 1;
+  };
+
+  uint16_t reg;
+} PPUAddress;
+
 struct PPU {
   uint8_t raw_nametable[2][1024];
   uint8_t palette[32];
-  uint8_t raw_pattern_table[2][4096];
 
   uint32_t framebuffer[256 * 240];
   uint32_t nametable[2][256 * 240];
@@ -18,6 +30,13 @@ struct PPU {
   uint16_t cycle;
   int scanline;
   uint8_t nmi;
+
+  enum {
+    MIRRORING_HORIZONTAL,
+    MIRRORING_VERTICAL,
+    MIRRORING_FOUR_SCREEN,
+    MIRRORING_SINGLE_SCREEN,
+  } mirroring;
 
   // Registers
   union {
@@ -63,12 +82,25 @@ struct PPU {
 
   uint8_t address_latch;
   uint8_t ppu_data_buffer;
-  uint16_t ppu_addr;
+
+  PPUAddress vram_addr;
+  PPUAddress tram_addr;
+  uint8_t fine_x;
+
+  uint8_t bg_next_tile_id;
+  uint8_t bg_next_tile_attrib;
+  uint8_t bg_next_tile_lsb;
+  uint8_t bg_next_tile_msb;
+
+  uint16_t bg_shifter_pattern_lo;
+  uint16_t bg_shifter_pattern_hi;
+  uint16_t bg_shifter_attrib_lo;
+  uint16_t bg_shifter_attrib_hi;
 
   Mapper *mapper;
 };
 
-void ppu_init(PPU *ppu, Mapper *mapper);
+void ppu_init(PPU *ppu, Mapper *mapper, uint8_t mirroring);
 void ppu_step(PPU *ppu);
 uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly);
 void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data);

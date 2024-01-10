@@ -1,6 +1,14 @@
 #include "ppu.h"
 #include <stdio.h>
 
+const uint8_t mirror_lookup[][4] = {
+    {0, 0, 1, 1}, // horizontal
+    {0, 1, 0, 1}, // vertical
+    {0, 0, 0, 0}, // single 0
+    {1, 1, 1, 1}, // single 1
+    {0, 1, 2, 3}, // four screen
+};
+
 const uint32_t palette[] = {
     0xff555555, 0xff731700, 0xff860700, 0xff78052e, 0xff4d0259, 0xff110072,
     0xff00006e, 0xff00084c, 0xff001b17, 0xff002a00, 0xff003100, 0xff082e00,
@@ -19,9 +27,13 @@ uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
 
   if (mapper_data) {
     return *mapper_data;
-  } else if (addr >= 0x0000 && addr <= 0x1FFF) { // pattern table
-    return ppu->raw_pattern_table[(addr & 0x1000) >> 12][addr & 0x0FFF];
   } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
+    uint16_t mirror_addr = (addr - 0x2000) & 0x0FFF;
+    uint16_t table = mirror_addr >> 10;
+    uint16_t offset = mirror_addr & 0x03FF;
+    uint16_t index = mirror_lookup[ppu->mirroring][table] * 0x0400 + offset;
+    uint8_t *nametable = ppu->raw_nametable[index];
+    return nametable[offset];
   } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
     addr &= 0x001F;
 
@@ -42,9 +54,13 @@ uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
 
 void ppu_write(PPU *ppu, uint16_t addr, uint8_t data) {
   if (ppu->mapper->chr_write(ppu->mapper, addr, data)) {
-  } else if (addr >= 0x0000 && addr <= 0x1FFF) { // pattern table
-    ppu->raw_pattern_table[(addr & 0x1000) >> 12][addr & 0x0FFF] = data;
   } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
+    uint16_t mirror_addr = (addr - 0x2000) & 0x0FFF;
+    uint16_t table = mirror_addr >> 10;
+    uint16_t offset = mirror_addr & 0x03FF;
+    uint16_t index = mirror_lookup[ppu->mirroring][table] * 0x0400 + offset;
+    uint8_t *nametable = ppu->raw_nametable[index];
+    nametable[offset] = data;
   } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
     addr &= 0x001F;
 
@@ -61,6 +77,11 @@ void ppu_write(PPU *ppu, uint16_t addr, uint8_t data) {
   }
 }
 
+static inline uint32_t ppu_get_color(PPU *ppu, uint8_t palette_id,
+                                     uint8_t pixel) {
+  return palette[ppu_read(ppu, 0x3F00 + (palette_id << 2) + pixel, false)];
+}
+
 uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
   uint8_t data = 0x00;
   switch (addr) {
@@ -71,17 +92,17 @@ uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
     break;
   case 7: // PPU Data
     data = ppu->ppu_data_buffer;
-    ppu->ppu_data_buffer = ppu_read(ppu, ppu->ppu_addr, readonly);
+    ppu->ppu_data_buffer = ppu_read(ppu, ppu->vram_addr.reg, readonly);
 
     // palette read is not delayed
-    if (ppu->ppu_addr >= 0x3F00) {
+    if (ppu->vram_addr.reg >= 0x3F00) {
       data = ppu->ppu_data_buffer;
     }
 
-    ppu->ppu_addr += 1;
+    ppu->vram_addr.reg += 1;
     /* if (ppu->control.increment_mode == 0) { */
     /* } else { */
-    /*   ppu->ppu_addr += 32; */
+    /*   ppu->vram_addr.reg += 32; */
     /* } */
 
     break;
@@ -94,36 +115,179 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
   switch (addr) {
   case 0:
     ppu->control.reg = data;
+    ppu->tram_addr.nametable_x = ppu->control.nametable_x;
+    ppu->tram_addr.nametable_y = ppu->control.nametable_y;
     break;
   case 1:
     ppu->mask.reg = data;
     break;
-  case 6: // PPU Address
+  case 5: // PPU Scroll
     if (ppu->address_latch == 0) {
-      ppu->ppu_addr = (ppu->ppu_addr & 0x00FF) | (data << 8);
+      ppu->fine_x = data & 0x07;
+      ppu->tram_addr.coarse_x = data >> 3;
       ppu->address_latch = 1;
     } else {
-      ppu->ppu_addr = (ppu->ppu_addr & 0xFF00) | data;
+      ppu->tram_addr.fine_y = data & 0x07;
+      ppu->tram_addr.coarse_y = data >> 3;
+      ppu->address_latch = 0;
+    }
+  case 6: // PPU Address
+    if (ppu->address_latch == 0) {
+      ppu->tram_addr.reg = (ppu->tram_addr.reg & 0x00FF) | (data << 8);
+      ppu->address_latch = 1;
+    } else {
+      ppu->tram_addr.reg = (ppu->tram_addr.reg & 0xFF00) | data;
+      ppu->vram_addr = ppu->tram_addr;
       ppu->address_latch = 0;
     }
 
-    ppu->ppu_addr += 1;
+    ppu->vram_addr.reg += 1;
     break;
   case 7: // PPU Data
-    ppu_write(ppu, ppu->ppu_addr, data);
-    ppu->ppu_addr += 1;
+    ppu_write(ppu, ppu->vram_addr.reg, data);
+    ppu->vram_addr.reg += ppu->control.increment_mode ? 32 : 1;
 
     break;
   }
 }
 
-void ppu_init(PPU *ppu, Mapper *mapper) { ppu->mapper = mapper; }
+void ppu_init(PPU *ppu, Mapper *mapper, uint8_t mirroring) {
+  ppu->mapper = mapper;
+  ppu->mirroring = mirroring;
+}
+
+void ppu_increment_scroll_x(PPU *ppu) {
+  if (ppu->mask.render_background || ppu->mask.render_sprites) {
+    if (ppu->vram_addr.coarse_x == 31) {
+      ppu->vram_addr.coarse_x = 0;
+      ppu->vram_addr.nametable_x = ~ppu->vram_addr.nametable_x;
+    } else {
+      ppu->vram_addr.coarse_x++;
+    }
+  }
+}
+
+void ppu_increment_scroll_y(PPU *ppu) {
+  if (ppu->mask.render_background || ppu->mask.render_sprites) {
+    if (ppu->vram_addr.fine_y < 7) {
+      ppu->vram_addr.fine_y++;
+    } else {
+      ppu->vram_addr.fine_y = 0;
+
+      if (ppu->vram_addr.coarse_y == 29) {
+        ppu->vram_addr.coarse_y = 0;
+        ppu->vram_addr.nametable_y = ~ppu->vram_addr.nametable_y;
+      } else if (ppu->vram_addr.coarse_y == 31) {
+        ppu->vram_addr.coarse_y = 0;
+      } else {
+        ppu->vram_addr.coarse_y++;
+      }
+    }
+  }
+}
+
+void ppu_transfer_address_x(PPU *ppu) {
+  if (ppu->mask.render_background || ppu->mask.render_sprites) {
+    ppu->vram_addr.nametable_x = ppu->tram_addr.nametable_x;
+    ppu->vram_addr.coarse_x = ppu->tram_addr.coarse_x;
+  }
+}
+
+void ppu_transfer_address_y(PPU *ppu) {
+  if (ppu->mask.render_background || ppu->mask.render_sprites) {
+    ppu->vram_addr.fine_y = ppu->tram_addr.fine_y;
+    ppu->vram_addr.nametable_y = ppu->tram_addr.nametable_y;
+    ppu->vram_addr.coarse_y = ppu->tram_addr.coarse_y;
+  }
+}
+
+void load_background_shifters(PPU *ppu) {
+  ppu->bg_shifter_pattern_lo =
+      (ppu->bg_shifter_pattern_lo & 0xFF00) | ppu->bg_next_tile_lsb;
+  ppu->bg_shifter_pattern_hi =
+      (ppu->bg_shifter_pattern_hi & 0xFF00) | ppu->bg_next_tile_msb;
+  // expand the attribute to full byte
+  ppu->bg_shifter_attrib_lo = (ppu->bg_shifter_attrib_lo & 0xFF00) |
+                              ((ppu->bg_next_tile_attrib & 0b01) ? 0xFF : 0x00);
+  ppu->bg_shifter_attrib_hi = (ppu->bg_shifter_attrib_hi & 0xFF00) |
+                              ((ppu->bg_next_tile_attrib & 0b10) ? 0xFF : 0x00);
+}
+
+void update_shifters(PPU *ppu) {
+  if (ppu->mask.render_background) {
+    ppu->bg_shifter_pattern_lo <<= 1;
+    ppu->bg_shifter_pattern_hi <<= 1;
+    ppu->bg_shifter_attrib_lo <<= 1;
+    ppu->bg_shifter_attrib_hi <<= 1;
+  }
+}
 
 void ppu_step(PPU *ppu) {
-  if (ppu->scanline == -1 && ppu->cycle == 1) {
-    ppu->status.vertical_blank = 0;
-    ppu->status.sprite_overflow = 0;
-    ppu->status.sprite_zero_hit = 0;
+  if (ppu->scanline >= -1 && ppu->scanline < 240) {
+    if (ppu->scanline == -1 && ppu->cycle == 1) {
+      ppu->status.vertical_blank = 0;
+      ppu->status.sprite_overflow = 0;
+      ppu->status.sprite_zero_hit = 0;
+    }
+
+    // visible scanlines
+    if ((ppu->cycle >= 2 && ppu->cycle < 258) ||
+        (ppu->cycle >= 321 && ppu->cycle < 338)) {
+      update_shifters(ppu);
+
+      switch ((ppu->cycle - 1) & 0x07) {
+      case 0:
+        load_background_shifters(ppu);
+        ppu->bg_next_tile_id =
+            ppu_read(ppu, 0x2000 | (ppu->vram_addr.reg & 0x0FFF), false);
+        break;
+      case 2:
+        ppu->bg_next_tile_attrib =
+            ppu_read(ppu,
+                     0x23C0 | (ppu->vram_addr.nametable_y << 11) |
+                         (ppu->vram_addr.nametable_x << 10) |
+                         ((ppu->vram_addr.coarse_y >> 2) << 3) |
+                         (ppu->vram_addr.coarse_x >> 2),
+                     false) &
+            0x03;
+
+      case 4:
+        ppu->bg_next_tile_lsb =
+            ppu_read(ppu,
+                     (ppu->control.pattern_background << 12) +
+                         ((uint16_t)ppu->bg_next_tile_id << 4) +
+                         (ppu->vram_addr.fine_y) + 0,
+                     false);
+        break;
+      case 6:
+        ppu->bg_next_tile_msb =
+            ppu_read(ppu,
+                     (ppu->control.pattern_background << 12) +
+                         ((uint16_t)ppu->bg_next_tile_id << 4) +
+                         (ppu->vram_addr.fine_y) + 8,
+                     false);
+        break;
+      case 7:
+        ppu_increment_scroll_x(ppu);
+        break;
+      }
+    }
+
+    if (ppu->cycle == 256) {
+      ppu_increment_scroll_y(ppu);
+    }
+
+    if (ppu->cycle == 257) {
+      ppu_transfer_address_x(ppu);
+    }
+
+    if (ppu->scanline == -1 && ppu->cycle >= 280 && ppu->cycle < 305) {
+      ppu_transfer_address_y(ppu);
+    }
+  }
+
+  if (ppu->scanline == 240) {
+    // do nothing
   }
 
   if (ppu->scanline == 241 && ppu->cycle == 1) {
@@ -133,6 +297,24 @@ void ppu_step(PPU *ppu) {
       ppu->nmi = true;
     }
   }
+
+  uint8_t bg_pixel = 0x00;
+  uint8_t bg_palette = 0x00;
+
+  if (ppu->mask.render_background) {
+    uint16_t bit_mux = 0x8000 >> ppu->fine_x;
+
+    uint8_t p0_pixel = (ppu->bg_shifter_pattern_lo & bit_mux) > 0;
+    uint8_t p1_pixel = (ppu->bg_shifter_pattern_hi & bit_mux) > 0;
+    bg_pixel = (p1_pixel << 1) | p0_pixel;
+
+    uint8_t bg_pal0 = (ppu->bg_shifter_attrib_lo & bit_mux) > 0;
+    uint8_t bg_pal1 = (ppu->bg_shifter_attrib_hi & bit_mux) > 0;
+    bg_palette = (bg_pal1 << 1) | bg_pal0;
+  }
+
+  int pixel_index = ppu->scanline * 256 + ppu->cycle - 1;
+  ppu->framebuffer[pixel_index] = ppu_get_color(ppu, bg_palette, bg_pixel);
 
   ppu->cycle++;
 
@@ -145,12 +327,6 @@ void ppu_step(PPU *ppu) {
       ppu->frame_complete = true;
     }
   }
-}
-
-
-static inline uint32_t ppu_get_color(PPU *ppu, uint8_t palette_id,
-                                     uint8_t pixel) {
-  return palette[ppu_read(ppu, 0x3F00 + (palette_id << 2) + pixel, false)];
 }
 
 uint32_t *ppu_get_pattern_table(PPU *ppu, uint8_t i, uint8_t palette) {

@@ -34,10 +34,12 @@ void emulator_init(Emulator *emulator, char *filename) {
   uint32_t mapper_id =
       (emulator->header[7] & 0xF0) | (emulator->header[6] >> 4);
 
+  uint8_t mirror_mode = emulator->header[6] & 0x01;
+
   mapper_init(&emulator->mapper, mapper_id);
   bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu);
   cpu_init(&emulator->cpu, &emulator->bus);
-  ppu_init(&emulator->ppu, &emulator->mapper);
+  ppu_init(&emulator->ppu, &emulator->mapper, mirror_mode);
 }
 
 void emulator_step(Emulator *emulator) {
