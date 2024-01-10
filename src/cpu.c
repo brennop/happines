@@ -166,13 +166,18 @@ void cpu_init(CPU *cpu, Bus *bus) {
   cpu_reset(cpu);
 }
 
+// FIXME: improve this
+// this is a hack to prevent from changing the ppu
+#define DATA()                                                                 \
+  (instruction.addressing_mode ? bus_read(cpu->bus, addr, false) : cpu->a)
+
 uint8_t cpu_step(CPU *cpu) {
   uint8_t opcode = bus_read(cpu->bus, cpu->pc, false);
   Instruction instruction = instructions[opcode];
 
   uint16_t trace_pc = cpu->pc;
 
-  // hack to make compiler happy about unused variables
+  // FIXME: hack to make compiler happy about unused variables
   cpu->pc = trace_pc + 1;
 
   uint8_t cycles = instruction.cycles;
@@ -180,12 +185,10 @@ uint8_t cpu_step(CPU *cpu) {
   uint8_t operation_cycles = 0;
 
   uint16_t addr = 0;
-  uint8_t data;
 
   // Addressing modes
   switch (instruction.addressing_mode) {
   case ADDR_MODE_IMP:
-    data = cpu->a;
     break;
   case ADDR_MODE_IMM:
     addr = cpu->pc++;
@@ -268,10 +271,6 @@ uint8_t cpu_step(CPU *cpu) {
   }
   }
 
-  if (instruction.addressing_mode != ADDR_MODE_IMP) {
-    data = bus_read(cpu->bus, addr, false);
-  }
-
   /* cpu_trace(instruction, trace_pc, data, addr); */
 
   switch (opcode) {
@@ -279,11 +278,11 @@ uint8_t cpu_step(CPU *cpu) {
   case 0xDA: // NOP
     break;
   case CASE8_4(0x61):
-    adc(cpu, data);
+    adc(cpu, DATA());
     operation_cycles = 1;
     break;
   case CASE8_4(0x21):
-    cpu->a &= data;
+    cpu->a &= DATA();
     cpu_set_flag(cpu, FLAG_ZERO, cpu->a == 0x00);
     cpu_set_flag(cpu, FLAG_NEGATIVE, cpu->a & 0x80);
     operation_cycles = 1;
@@ -292,7 +291,7 @@ uint8_t cpu_step(CPU *cpu) {
     cpu->a = asl(cpu, cpu->a);
     break;
   case CASE4(0x06):
-    bus_write(cpu->bus, addr, asl(cpu, data));
+    bus_write(cpu->bus, addr, asl(cpu, DATA()));
     break;
   case VERT_8(0x10):
     if ((cpu->status >> BRANCH_OFF[opcode >> 6] & 0x01) ==
@@ -306,12 +305,12 @@ uint8_t cpu_step(CPU *cpu) {
     break;
   // FIXME: f1 takes too long
   case CASE8_4(0xE1):
-    adc(cpu, ~data);
+    adc(cpu, ~DATA());
     operation_cycles = 1;
     break;
   case 0x24:
   case 0x2c:
-    bit(cpu, data);
+    bit(cpu, DATA());
     break;
   case 0x00:
     brk(cpu);
@@ -337,25 +336,27 @@ uint8_t cpu_step(CPU *cpu) {
     cpu_set_flag(cpu, FLAG_DECIMAL_MODE, true);
     break;
   case CASE8_4(0xC1): // CMP
-    cmp(cpu, cpu->a, data);
+    cmp(cpu, cpu->a, DATA());
     operation_cycles = 1;
     break;
   case 0xE0:
   case 0xE4:
   case 0xEC:
-    cmp(cpu, cpu->x, data);
+    cmp(cpu, cpu->x, DATA());
     operation_cycles = 1;
     break;
   case 0xC0:
   case 0xC4:
   case 0xCC:
-    cmp(cpu, cpu->y, data);
+    cmp(cpu, cpu->y, DATA());
     operation_cycles = 1;
     break;
-  case CASE4(0xC6):
+  case CASE4(0xC6): {
+    uint8_t data = bus_read(cpu->bus, addr, false);
     bus_write(cpu->bus, addr, data - 1);
     SET_ZERO_NEGATIVE(data - 1);
     break;
+  }
   case 0xCA:
     cpu->x--;
     SET_ZERO_NEGATIVE(cpu->x);
@@ -365,13 +366,15 @@ uint8_t cpu_step(CPU *cpu) {
     SET_ZERO_NEGATIVE(cpu->y);
     break;
   case CASE8_4(0x41): // EOR
-    eor(cpu, data);
+    eor(cpu, DATA());
     operation_cycles = 1;
     break;
-  case CASE4(0xE6): // INC
+  case CASE4(0xE6): { // INC
+    uint8_t data = bus_read(cpu->bus, addr, false);
     bus_write(cpu->bus, addr, data + 1);
     SET_ZERO_NEGATIVE((uint8_t)(data + 1));
     break;
+  }
   case 0xE8:
     cpu->x++;
     SET_ZERO_NEGATIVE(cpu->x);
@@ -391,24 +394,24 @@ uint8_t cpu_step(CPU *cpu) {
     cpu->pc = addr;
     break;
   case CASE8_4(0xA1): // LDA
-    cpu->a = data;
+    cpu->a = DATA();
     SET_ZERO_NEGATIVE(cpu->a);
     operation_cycles = 1;
     break;
   case 0xA2:
   case CASE4(0xA6): // LDX
-    cpu->x = data;
+    cpu->x = DATA();
     SET_ZERO_NEGATIVE(cpu->x);
     operation_cycles = 1;
     break;
   case 0xA0:
   case CASE4(0xA4): // LDY
-    cpu->y = data;
+    cpu->y = DATA();
     SET_ZERO_NEGATIVE(cpu->y);
     operation_cycles = 1;
     break;
   case CASE4(0x46):
-    bus_write(cpu->bus, addr, lsr(cpu, data));
+    bus_write(cpu->bus, addr, lsr(cpu, DATA()));
     break;
   case 0x4A:
     cpu->a = lsr(cpu, cpu->a);
@@ -416,7 +419,7 @@ uint8_t cpu_step(CPU *cpu) {
   case 0xEA:
     break;
   case CASE8_4(0x01): // ORA
-    cpu->a |= data;
+    cpu->a |= DATA();
     SET_ZERO_NEGATIVE(cpu->a);
     operation_cycles = 1;
     break;
@@ -434,13 +437,13 @@ uint8_t cpu_step(CPU *cpu) {
     cpu->status = pop(cpu) & ~(FLAG_UNUSED | FLAG_BREAK);
     break;
   case CASE4(0x26):
-    bus_write(cpu->bus, addr, rol(cpu, data));
+    bus_write(cpu->bus, addr, rol(cpu, DATA()));
     break;
   case 0x2A:
     cpu->a = rol(cpu, cpu->a);
     break;
   case CASE4(0x66):
-    bus_write(cpu->bus, addr, ror(cpu, data));
+    bus_write(cpu->bus, addr, ror(cpu, DATA()));
     break;
   case 0x6A:
     cpu->a = ror(cpu, cpu->a);

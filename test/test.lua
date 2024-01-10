@@ -27,9 +27,10 @@ end
 local function load_cpu()
   local cpu = ffi.new("CPU")
   local bus = ffi.new("Bus")
+  local mapper = ffi.new("Mapper")
 
-  lib.mapper_init(bus.mapper, 0xffffffff)
-
+  lib.mapper_init(mapper, 0xffffffff)
+  lib.bus_init(bus, mapper, nil)
   lib.cpu_init(cpu, bus)
 
   return cpu

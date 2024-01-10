@@ -134,8 +134,6 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
       ppu->vram_addr = ppu->tram_addr;
       ppu->address_latch = 0;
     }
-
-    ppu->vram_addr.reg += 1;
     break;
   case 7: // PPU Data
     ppu_write(ppu, ppu->vram_addr.reg, data);
