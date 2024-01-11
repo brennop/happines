@@ -9,6 +9,12 @@ void bus_init(Bus *bus, Mapper *mapper, PPU *ppu, uint8_t *controller) {
   bus->mapper = mapper;
   bus->ppu = ppu;
   bus->controller = controller;
+
+  bus->dma_page = 0x00;
+  bus->dma_data = 0x00;
+  bus->dma_addr = 0x00;
+  bus->dma_dummy = true;
+  bus->dma_transfer = false;
 }
 
 inline uint8_t bus_read(Bus *bus, uint16_t addr, bool read_only) {
@@ -55,7 +61,9 @@ void bus_write(Bus *bus, uint16_t addr, uint8_t data) {
   } else if (addr >= 0x4000 && addr <= 0x4013) {
     // apu range
   } else if (addr == 0x4014) {
-    // oam dma
+    bus->dma_page = data;
+    bus->dma_addr = 0x00;
+    bus->dma_transfer = true;
   } else if (addr == 0x4015) {
     // apu range
   } else if (addr == 0x4016) {
@@ -76,4 +84,26 @@ uint16_t bus_read_wide(Bus *bus, uint16_t addr, bool read_only) {
   uint16_t hi = bus_read(bus, addr + 1, read_only);
 
   return (hi << 8) | lo;
+}
+
+void bus_dma_transfer(Bus *bus, int cycles) {
+  // add dummy cycle
+  if (bus->dma_dummy) {
+    if (cycles % 2 == 1) {
+      bus->dma_dummy = false;
+    }
+  } else {
+    if (cycles % 2 == 0) {
+      bus->dma_data = bus_read(bus, (bus->dma_page << 8) | bus->dma_addr, false);
+    } else {
+      uint8_t *oam = (uint8_t *)bus->ppu->oam;
+      oam[bus->dma_addr] = bus->dma_data;
+      bus->dma_addr++;
+
+      if (bus->dma_addr == 0x00) {
+        bus->dma_transfer = false;
+        bus->dma_dummy = true;
+      }
+    }
+  }
 }

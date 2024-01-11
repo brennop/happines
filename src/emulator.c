@@ -37,7 +37,8 @@ void emulator_init(Emulator *emulator, char *filename) {
   uint8_t mirror_mode = emulator->header[6] & 0x01;
 
   mapper_init(&emulator->mapper, mapper_id);
-  bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu, emulator->controller);
+  bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu,
+           emulator->controller);
   cpu_init(&emulator->cpu, &emulator->bus);
   ppu_init(&emulator->ppu, &emulator->mapper, mirror_mode);
 }
@@ -47,7 +48,11 @@ void emulator_step(Emulator *emulator) {
     ppu_step(&emulator->ppu);
 
     if (emulator->cycles % 3 == 0) {
-      cpu_step(&emulator->cpu);
+      if (emulator->bus.dma_transfer) {
+        bus_dma_transfer(&emulator->bus, emulator->cycles);
+      } else {
+        cpu_step(&emulator->cpu);
+      }
     }
 
     if (emulator->ppu.nmi) {

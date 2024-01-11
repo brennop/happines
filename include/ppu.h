@@ -5,6 +5,13 @@
 #include "common.h"
 #include "mapper.h"
 
+typedef struct {
+  uint8_t y;
+  uint8_t tile_id;
+  uint8_t attributes;
+  uint8_t x;
+} Sprite;
+
 typedef union {
   struct {
     uint16_t coarse_x : 5;
@@ -96,6 +103,14 @@ struct PPU {
   uint16_t bg_shifter_pattern_hi;
   uint16_t bg_shifter_attrib_lo;
   uint16_t bg_shifter_attrib_hi;
+
+  uint8_t oam_addr;
+  Sprite oam[64];
+
+  Sprite sprite_scanline[8];
+  uint8_t sprite_count;
+  uint8_t sprite_shifter_pattern_lo[8];
+  uint8_t sprite_shifter_pattern_hi[8];
 
   Mapper *mapper;
 };
