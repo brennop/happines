@@ -59,6 +59,18 @@ void frontend_update(Frontend *frontend, Emulator *emulator) {
     }
   }
 
+  // handle input
+  const uint8_t *keyboard_state = SDL_GetKeyboardState(NULL);
+  emulator->controller[0] = 0x00;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_X] << 7;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_Z] << 6;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_A] << 5;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_S] << 4;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_UP] << 3;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_DOWN] << 2;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_LEFT] << 1;
+  emulator->controller[0] |= keyboard_state[SDL_SCANCODE_RIGHT] << 0;
+
   // draw
   SDL_SetRenderDrawColor(frontend->renderer, 0, 0, 0, 255);
   SDL_RenderClear(frontend->renderer);

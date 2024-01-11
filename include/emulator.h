@@ -21,6 +21,9 @@ typedef struct {
    */
   uint8_t header[16];
 
+  /** Input */
+  uint8_t controller[2];
+
   int cycles;
 } Emulator;
 

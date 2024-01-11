@@ -3,11 +3,12 @@
 
 #include <stdio.h>
 
-void bus_init(Bus *bus, Mapper *mapper, PPU *ppu) {
+void bus_init(Bus *bus, Mapper *mapper, PPU *ppu, uint8_t *controller) {
   // reset ram
 
   bus->mapper = mapper;
   bus->ppu = ppu;
+  bus->controller = controller;
 }
 
 inline uint8_t bus_read(Bus *bus, uint16_t addr, bool read_only) {
@@ -18,6 +19,26 @@ inline uint8_t bus_read(Bus *bus, uint16_t addr, bool read_only) {
   } else if (addr >= 0x2000 && addr <= 0x3FFF) {
     // ppu range
     return ppu_control_read(bus->ppu, addr & 0x0007, read_only);
+  } else if (addr >= 0x4000 && addr <= 0x4013) {
+    // apu range
+  } else if (addr == 0x4014) {
+    // oam dma
+  } else if (addr == 0x4015) {
+    // apu range
+  } else if (addr == 0x4016) {
+    // controller 1
+    uint8_t data = (bus->controller_state[0] & 0x80) > 0;
+    bus->controller_state[0] <<= 1;
+    return data;
+  } else if (addr == 0x4017) {
+    // controller 2
+    uint8_t data = (bus->controller_state[1] & 0x80) > 0;
+    bus->controller_state[1] <<= 1;
+    return data;
+  } else if (addr >= 0x4018 && addr <= 0x401F) {
+    // apu range
+  } else if (addr >= 0x4020 && addr <= 0xFFFF) {
+    // mapper range
   }
 
   return 0;
@@ -31,6 +52,22 @@ void bus_write(Bus *bus, uint16_t addr, uint8_t data) {
   } else if (addr >= 0x2000 && addr <= 0x3FFF) {
     // ppu range
     ppu_control_write(bus->ppu, addr & 0x0007, data);
+  } else if (addr >= 0x4000 && addr <= 0x4013) {
+    // apu range
+  } else if (addr == 0x4014) {
+    // oam dma
+  } else if (addr == 0x4015) {
+    // apu range
+  } else if (addr == 0x4016) {
+    // controller 1
+    bus->controller_state[0] = bus->controller[0];
+  } else if (addr == 0x4017) {
+    // controller 2
+    bus->controller_state[1] = bus->controller[1];
+  } else if (addr >= 0x4018 && addr <= 0x401F) {
+    // apu range
+  } else if (addr >= 0x4020 && addr <= 0xFFFF) {
+    // mapper range
   }
 }
 
