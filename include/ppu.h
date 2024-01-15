@@ -38,13 +38,6 @@ struct PPU {
   int scanline;
   uint8_t nmi;
 
-  enum {
-    MIRRORING_HORIZONTAL,
-    MIRRORING_VERTICAL,
-    MIRRORING_FOUR_SCREEN,
-    MIRRORING_SINGLE_SCREEN,
-  } mirroring;
-
   // Registers
   union {
     struct {

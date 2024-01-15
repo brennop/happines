@@ -36,7 +36,7 @@ void emulator_init(Emulator *emulator, char *filename) {
 
   uint8_t mirror_mode = emulator->header[6] & 0x01;
 
-  mapper_init(&emulator->mapper, mapper_id);
+  mapper_init(&emulator->mapper, mapper_id, mirror_mode);
   bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu,
            emulator->controller);
   cpu_init(&emulator->cpu, &emulator->bus);

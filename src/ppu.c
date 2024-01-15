@@ -36,11 +36,12 @@ uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
   if (mapper_data) {
     return *mapper_data;
   } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
+    uint8_t mirror_mode = ppu->mapper->mirror(ppu->mapper);
     int mirror_addr = (addr - 0x2000) % 0x1000;
     uint8_t table = mirror_addr / 0x0400;
     int offset = mirror_addr % 0x0400;
     uint16_t index =
-        mirror_lookup[ppu->mirroring][table] * 0x0400 + offset + 0x2000;
+        mirror_lookup[mirror_mode][table] * 0x0400 + offset + 0x2000;
     return ppu->raw_nametable[index % 2048];
   } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
     addr &= 0x001F;
@@ -63,11 +64,12 @@ uint8_t ppu_read(PPU *ppu, uint16_t addr, bool readonly) {
 void ppu_write(PPU *ppu, uint16_t addr, uint8_t data) {
   if (ppu->mapper->chr_write(ppu->mapper, addr, data)) {
   } else if (addr >= 0x2000 && addr <= 0x3EFF) { // nametable
+    uint8_t mirror_mode = ppu->mapper->mirror(ppu->mapper);
     int mirror_addr = (addr - 0x2000) % 0x1000;
     uint8_t table = mirror_addr / 0x0400;
     int offset = mirror_addr % 0x0400;
     uint16_t index =
-        mirror_lookup[ppu->mirroring][table] * 0x0400 + offset + 0x2000;
+        mirror_lookup[mirror_mode][table] * 0x0400 + offset + 0x2000;
     ppu->raw_nametable[index % 2048] = data;
   } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // palette
     addr &= 0x001F;
@@ -166,8 +168,6 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
 
 void ppu_init(PPU *ppu, Mapper *mapper, uint8_t mirroring) {
   ppu->mapper = mapper;
-  ppu->mirroring = mirroring;
-
   ppu->cycle = 0;
   ppu->scanline = 0;
 }
