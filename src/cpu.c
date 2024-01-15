@@ -6,9 +6,8 @@
 
 const uint8_t BRANCH_OFF[] = {7, 6, 0, 1};
 
-void cpu_trace(Instruction instruction, uint16_t addr, uint8_t data,
-               uint16_t addr2) {
-  printf("0x%04X: %s %02X (0x%04X)\n", addr, instruction.mnemonic, data, addr2);
+void cpu_trace(Instruction instruction, CPU* cpu, uint8_t op, uint16_t addr, uint16_t addr2) {
+  printf("0x%04X: %02X %s 0x%04X, A: %02X X: %02X Y: %02X\n", addr, op, instruction.mnemonic, addr2, cpu->a, cpu->x, cpu->y);
 }
 
 #define CASE8_4(x)                                                             \
@@ -271,7 +270,7 @@ uint8_t cpu_step(CPU *cpu) {
   }
   }
 
-  /* cpu_trace(instruction, trace_pc, data, addr); */
+  /* cpu_trace(instruction, cpu, opcode, trace_pc, addr); */
 
   switch (opcode) {
   case 0xFA:

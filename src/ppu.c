@@ -144,6 +144,7 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
       ppu->tram_addr.coarse_y = data >> 3;
       ppu->address_latch = 0;
     }
+    break;
   case 6: // PPU Address
     if (ppu->address_latch == 0) {
       ppu->tram_addr.reg =
@@ -166,6 +167,9 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
 void ppu_init(PPU *ppu, Mapper *mapper, uint8_t mirroring) {
   ppu->mapper = mapper;
   ppu->mirroring = mirroring;
+
+  ppu->cycle = 0;
+  ppu->scanline = 0;
 }
 
 void ppu_increment_scroll_x(PPU *ppu) {
@@ -247,6 +251,10 @@ void update_shifters(PPU *ppu) {
 
 void ppu_step(PPU *ppu) {
   if (ppu->scanline >= -1 && ppu->scanline < 240) {
+    if (ppu->scanline == 0 && ppu->cycle == 0) {
+      ppu->cycle = 1;
+    }
+
     if (ppu->scanline == -1 && ppu->cycle == 1) {
       ppu->status.vertical_blank = 0;
       ppu->status.sprite_overflow = 0;
@@ -302,6 +310,7 @@ void ppu_step(PPU *ppu) {
                          ((uint16_t)ppu->bg_next_tile_id << 4) +
                          (ppu->vram_addr.fine_y) + 8,
                      false);
+
         break;
       case 7:
         ppu_increment_scroll_x(ppu);
