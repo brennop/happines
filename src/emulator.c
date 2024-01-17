@@ -40,7 +40,7 @@ void emulator_init(Emulator *emulator, char *filename) {
   bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu, &emulator->apu,
            emulator->controller);
   cpu_init(&emulator->cpu, &emulator->bus);
-  /* apu_init(&emulator->apu); */
+  apu_init(&emulator->apu);
   ppu_init(&emulator->ppu, &emulator->mapper, mirror_mode);
 }
 

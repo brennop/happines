@@ -1,13 +1,19 @@
 #include "apu.h"
 #include <SDL2/SDL.h>
 
+const uint8_t DUTY_CYCLE_TABLE[4][8] = {{0, 1, 0, 0, 0, 0, 0, 0},
+                                        {0, 1, 1, 0, 0, 0, 0, 0},
+                                        {0, 1, 1, 1, 1, 0, 0, 0},
+                                        {1, 0, 0, 1, 1, 1, 1, 1}};
+
 uint8_t pulse_output(Pulse *pulse) {
-  if (!pulse->enabled) {
+  bool value = DUTY_CYCLE_TABLE[pulse->duty_cycle][pulse->duty];
+  if (!pulse->enabled || !value) {
     return 0;
   }
 
   // TODO: why period?
-  return pulse->envelope_enabled ? pulse->envelope_value : pulse->envelope_period;
+  return pulse->envelope_enabled ? pulse->envelope_value : pulse->timer_period;
 }
 
 void pulse_step(Pulse *pulse) {
@@ -66,7 +72,7 @@ void apu_init(APU *apu) {
 void apu_write(APU *apu, uint16_t address, uint8_t value) {
   switch (address) {
   case 0x4000:
-    apu->pulse1.duty = (value >> 6) & 0x03;
+    apu->pulse1.duty_cycle = (value >> 6) & 0x03;
     apu->pulse1.envelope_enabled = !(value & 0x10);
     apu->pulse1.envelope_period = value & 0x0F;
     break;
@@ -99,16 +105,15 @@ void apu_step(APU *apu) {
     if ((apu->frame_counter >> 7) & 1) { // 5-step
       if (apu->frame_step % 5 != 3) {
         // clock envelope
-        pulse_envelope_step(&apu->pulse1);
       }
     } else { // 4-step
-      pulse_envelope_step(&apu->pulse1);
     }
+    pulse_envelope_step(&apu->pulse1);
 
     apu->frame_step++;
   }
 
-  apu->buffer[apu->buffer_index++] = sin((float) apu->cycles * 2.0 * 3.14159165 / 44100 * 440);
+  apu->buffer[apu->buffer_index++] = pulse_output(&apu->pulse1);
 
   if (apu->buffer_index >= SAMPLES) {
     apu->buffer_index = 0;

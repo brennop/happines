@@ -8,6 +8,7 @@
 typedef struct {
   bool enabled;
 
+  uint8_t duty_cycle;
   /** index into duty cycle table */
   uint8_t duty;
 
