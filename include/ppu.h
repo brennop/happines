@@ -1,7 +1,6 @@
 #ifndef __PPU_H__
 #define __PPU_H__
 
-#include "bus.h"
 #include "common.h"
 #include "mapper.h"
 
@@ -25,7 +24,7 @@ typedef union {
   uint16_t reg;
 } PPUAddress;
 
-struct PPU {
+typedef struct {
   uint8_t raw_nametable[2 * 1024];
   uint8_t palette[32];
 
@@ -106,7 +105,7 @@ struct PPU {
   uint8_t sprite_shifter_pattern_hi[8];
 
   Mapper *mapper;
-};
+} PPU;
 
 void ppu_init(PPU *ppu, Mapper *mapper, uint8_t mirroring);
 void ppu_step(PPU *ppu);

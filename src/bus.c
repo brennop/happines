@@ -3,12 +3,13 @@
 
 #include <stdio.h>
 
-void bus_init(Bus *bus, Mapper *mapper, PPU *ppu, uint8_t *controller) {
+void bus_init(Bus *bus, Mapper *mapper, PPU *ppu, APU *apu, uint8_t *controller) {
   // reset ram
 
   bus->mapper = mapper;
   bus->ppu = ppu;
   bus->controller = controller;
+  bus->apu = apu;
 
   bus->dma_page = 0x00;
   bus->dma_data = 0x00;
@@ -60,12 +61,14 @@ void bus_write(Bus *bus, uint16_t addr, uint8_t data) {
     ppu_control_write(bus->ppu, addr & 0x0007, data);
   } else if (addr >= 0x4000 && addr <= 0x4013) {
     // apu range
+    apu_write(bus->apu, addr, data);
   } else if (addr == 0x4014) {
     bus->dma_page = data;
     bus->dma_addr = 0x00;
     bus->dma_transfer = true;
-  } else if (addr == 0x4015) {
+  } else if (addr == 0x4015 || addr == 0x4017) {
     // apu range
+    apu_write(bus->apu, addr, data);
   } else if (addr == 0x4016) {
     // controller 1
     bus->controller_state[0] = bus->controller[0];

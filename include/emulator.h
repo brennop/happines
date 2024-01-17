@@ -4,6 +4,7 @@
 #include "bus.h"
 #include "cpu.h"
 #include "ppu.h"
+#include "apu.h"
 #include "mapper.h"
 
 #define NES_MAGIC_NUMBER "NES\x1a"
@@ -14,6 +15,7 @@ typedef struct {
   Bus bus;
   CPU cpu;
   PPU ppu;
+  APU apu;
   Mapper mapper;
 
   /**

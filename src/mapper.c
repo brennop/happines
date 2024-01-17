@@ -361,6 +361,7 @@ void scanline() {}
 void mapper_init(Mapper *mapper, uint32_t mapper_id, uint8_t mirror_mode) {
   mapper->mirror_mode = mirror_mode;
   mapper->scanline = scanline;
+  mapper->irq_active = false;
 
   if (mapper_id == 0) {
     mapper->prg_read = mapper_000_prg_read;

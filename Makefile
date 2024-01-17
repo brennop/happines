@@ -5,7 +5,7 @@ CC = gcc
 CFLAGS = -Wall -Werror -std=c99 -Iinclude -fPIC `sdl2-config --cflags` -g
 
 # Linker flags
-LDFLAGS = `sdl2-config --libs`
+LDFLAGS = `sdl2-config --libs` -lm
 
 # Directories
 SRC_DIR = src
