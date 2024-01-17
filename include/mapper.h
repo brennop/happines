@@ -18,6 +18,7 @@ typedef struct Mapper {
   uint8_t *(*chr_read)(struct Mapper *, uint16_t);
   bool (*chr_write)(struct Mapper *, uint16_t, uint8_t);
   uint8_t (*mirror)(struct Mapper *);
+  void (*scanline)(struct Mapper *);
 
   uint8_t ram[0x10000];
 
@@ -42,6 +43,19 @@ typedef struct Mapper {
   uint8_t chr_bank;
   uint8_t chr_bank_lo;
   uint8_t chr_bank_hi;
+
+  uint32_t registers[8];
+  uint32_t chr_offsets[8];
+  uint32_t prg_offsets[4];
+
+  uint8_t irq_enabled;
+  uint8_t irq_active;
+  uint16_t irq_counter;
+  uint16_t irq_reload;
+
+  uint8_t target_register;
+  uint8_t prg_bank_mode;
+  uint8_t chr_inversion;
 } Mapper;
 
 void mapper_init(Mapper *mapper, uint32_t mapper_id, uint8_t mirror_mode);

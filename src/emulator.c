@@ -60,6 +60,11 @@ void emulator_step(Emulator *emulator) {
       cpu_nmi(&emulator->cpu);
     }
 
+    if (emulator->mapper.irq_active) {
+      emulator->mapper.irq_active = false;
+      cpu_irq(&emulator->cpu);
+    }
+
     emulator->cycles++;
   }
 

@@ -497,6 +497,12 @@ void ppu_step(PPU *ppu) {
 
   ppu->cycle++;
 
+  if (ppu->mask.render_background || ppu->mask.render_sprites) {
+    if (ppu->cycle == 260 && ppu->scanline < 240) {
+      ppu->mapper->scanline(ppu->mapper);
+    }
+  }
+
   if (ppu->cycle >= 341) {
     ppu->cycle = 0;
     ppu->scanline++;
