@@ -52,8 +52,10 @@ void emulator_step(Emulator *emulator) {
       if (emulator->bus.dma_transfer) {
         bus_dma_transfer(&emulator->bus, emulator->cycles);
       } else {
-        cpu_step(&emulator->cpu);
-        apu_step(&emulator->apu);
+        int cycles = cpu_step(&emulator->cpu);
+        for (int i = 0; i < cycles; i++) {
+          apu_step(&emulator->apu);
+        }
       }
     }
 

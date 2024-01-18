@@ -6,6 +6,8 @@ const uint8_t DUTY_CYCLE_TABLE[4][8] = {{0, 1, 0, 0, 0, 0, 0, 0},
                                         {0, 1, 1, 1, 1, 0, 0, 0},
                                         {1, 0, 0, 1, 1, 1, 1, 1}};
 
+float sample(APU *apu, uint8_t pulse1) { return apu->pulse_table[pulse1]; }
+
 uint8_t pulse_output(Pulse *pulse) {
   bool value = DUTY_CYCLE_TABLE[pulse->duty_cycle][pulse->duty];
   if (!pulse->enabled || !value) {
@@ -13,7 +15,8 @@ uint8_t pulse_output(Pulse *pulse) {
   }
 
   // TODO: why period?
-  return pulse->envelope_enabled ? pulse->envelope_value : pulse->timer_period;
+  return pulse->envelope_enabled ? pulse->envelope_value
+                                 : pulse->envelope_period;
 }
 
 void pulse_step(Pulse *pulse) {
@@ -105,15 +108,19 @@ void apu_step(APU *apu) {
     if ((apu->frame_counter >> 7) & 1) { // 5-step
       if (apu->frame_step % 5 != 3) {
         // clock envelope
+        pulse_envelope_step(&apu->pulse1);
       }
     } else { // 4-step
+      pulse_envelope_step(&apu->pulse1);
     }
-    pulse_envelope_step(&apu->pulse1);
 
     apu->frame_step++;
   }
 
-  apu->buffer[apu->buffer_index++] = pulse_output(&apu->pulse1);
+  // downsample
+  if (apu->cycles % (APU_RATE / SAMPLE_RATE) == 0) {
+    apu->buffer[apu->buffer_index++] = sample(apu, pulse_output(&apu->pulse1));
+  }
 
   if (apu->buffer_index >= SAMPLES) {
     apu->buffer_index = 0;

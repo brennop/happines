@@ -4,6 +4,8 @@
 #include "common.h"
 
 #define SAMPLES 1024
+#define SAMPLE_RATE 44100
+#define APU_RATE 1789773
 
 typedef struct {
   bool enabled;
