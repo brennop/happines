@@ -44,7 +44,7 @@ typedef struct {
 } Pulse;
 
 typedef struct {
-  Pulse pulse1;
+  Pulse pulses[2];
 
   float pulse_table[31];
 
