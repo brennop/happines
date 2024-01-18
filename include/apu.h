@@ -44,9 +44,25 @@ typedef struct {
 } Pulse;
 
 typedef struct {
+  bool enabled;
+  LengthCounter length_counter;
+
+  bool linear_counter_enabled;
+  uint8_t linear_counter_period;
+  uint16_t timer_period;
+
+  bool linear_counter_reload;
+  uint8_t linear_counter_value;
+  uint8_t duty_value;
+  uint16_t timer_value;
+} Triangle;
+
+typedef struct {
   Pulse pulses[2];
+  Triangle triangle;
 
   float pulse_table[31];
+  float tnd_table[203];
 
   float buffer[SAMPLES];
   uint32_t buffer_index;

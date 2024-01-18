@@ -10,6 +10,10 @@ const uint8_t LENGTH_COUNTER_TABLE[32] = {10, 254, 20,  2,  40, 4,  80, 6,  160,
                                           10, 14,  12,  26, 14, 12, 16, 24, 18,  48, 20,
                                           96, 22,  192, 24, 72, 26, 16, 28, 32,  30};
 
+const uint8_t TRIANGLE_TABLE[] = {0xF, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0x6, 0x5,
+                                  0x4, 0x3, 0x2, 0x1, 0x0, 0x0, 0x1, 0x2, 0x3, 0x4, 0x5,
+                                  0x6, 0x7, 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
+
 uint8_t pulse_output(Pulse *pulse) {
   bool value = DUTY_CYCLE_TABLE[pulse->duty_cycle][pulse->duty_value];
   if (!pulse->enabled || !value ||
@@ -48,9 +52,7 @@ void pulse_sweep_step(Pulse *pulse) {
 
       if (pulse->sweep_negate) {
         pulse->timer_period -= delta;
-        if (pulse->channel == 1) {
-          pulse->timer_period--;
-        }
+        if (pulse->channel == 1) pulse->timer_period--;
       } else {
         pulse->timer_period += delta;
       }
@@ -58,6 +60,35 @@ void pulse_sweep_step(Pulse *pulse) {
 
     pulse->sweep_counter = pulse->sweep_period;
   }
+}
+
+uint8_t triangle_output(Triangle *triangle) {
+  if (!triangle->enabled || triangle->length_counter.value == 0 ||
+      triangle->linear_counter_value == 0) {
+    return 0;
+  }
+
+  return TRIANGLE_TABLE[triangle->duty_value];
+}
+
+void triangle_step(Triangle *triangle) {
+  if (triangle->timer_value) {
+    triangle->timer_value--;
+  } else {
+    triangle->timer_value = triangle->timer_period;
+    triangle->duty_value = (triangle->duty_value + 1) % 32;
+  }
+}
+
+void triangle_counter_step(Triangle *triangle) {
+  // FIXME: is this realy needed? as it already happens in apu_write
+  if (triangle->linear_counter_reload) {
+    triangle->linear_counter_value = triangle->linear_counter_period;
+  } else if (triangle->linear_counter_value > 0) {
+    triangle->linear_counter_value--;
+  }
+
+  if (triangle->linear_counter_enabled) triangle->linear_counter_reload = false;
 }
 
 void envelope_step(Envelope *envelope) {
@@ -90,11 +121,13 @@ void length_counter_step(LengthCounter *length_counter) {
 static inline void step_envelopes(APU *apu) {
   envelope_step(&apu->pulses[0].envelope);
   envelope_step(&apu->pulses[1].envelope);
+  triangle_counter_step(&apu->triangle);
 }
 
 static inline void step_length_and_sweep(APU *apu) {
   length_counter_step(&apu->pulses[0].length_counter);
   length_counter_step(&apu->pulses[1].length_counter);
+  length_counter_step(&apu->triangle.length_counter);
 
   pulse_sweep_step(&apu->pulses[0]);
   pulse_sweep_step(&apu->pulses[1]);
@@ -121,6 +154,13 @@ void apu_init(APU *apu) {
   for (int i = 0; i < 31; i++) {
     apu->pulse_table[i] = 95.52 / (8128.0 / (float)i + 100);
   }
+
+  for (int i = 0; i < 203; i++) {
+    apu->tnd_table[i] = 163.67 / (24329.0 / (float)i + 100);
+  }
+
+  apu->pulses[0].channel = 1;
+  apu->pulses[1].channel = 2;
 }
 
 void apu_write(APU *apu, uint16_t address, uint8_t value) {
@@ -155,11 +195,29 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     apu->pulses[channel].length_counter.value = LENGTH_COUNTER_TABLE[value >> 3];
     apu->pulses[channel].envelope.start = true;
     break;
+  case 0x4008:
+    apu->triangle.length_counter.enabled = (value & 0x80) == 0;
+    apu->triangle.linear_counter_enabled = (value & 0x80) == 0;
+    apu->triangle.linear_counter_period = value & 0x7F;
+    break;
+  case 0x400A:
+    apu->triangle.timer_period = (apu->triangle.timer_period & 0xFF00) | value;
+    break;
+  case 0x400B:
+    apu->triangle.timer_period =
+        (apu->triangle.timer_period & 0x00FF) | ((uint16_t)(value & 0x07) << 8);
+    apu->triangle.length_counter.value = LENGTH_COUNTER_TABLE[value >> 3];
+    // reload linear counter and set reload flag
+    apu->triangle.linear_counter_value = apu->triangle.linear_counter_period;
+    apu->triangle.linear_counter_reload = true;
+    break;
   case 0x4015:
     apu->pulses[0].enabled = value & 0x01;
     if (!apu->pulses[0].enabled) apu->pulses[0].length_counter.value = 0;
     apu->pulses[1].enabled = value & 0x02;
     if (!apu->pulses[1].enabled) apu->pulses[1].length_counter.value = 0;
+    apu->triangle.enabled = value & 0x04;
+    if (!apu->triangle.enabled) apu->triangle.length_counter.value = 0;
     break;
   case 0x4017:
     apu->frame_counter = value;
@@ -175,6 +233,7 @@ void apu_step(APU *apu) {
   if (apu->cycles % 2 == 0) {
     pulse_step(&apu->pulses[0]);
     pulse_step(&apu->pulses[1]);
+    triangle_step(&apu->triangle);
   }
 
   // clock length counters
@@ -206,7 +265,9 @@ void apu_step(APU *apu) {
   // downsample
   if (apu->cycles % (APU_RATE / SAMPLE_RATE) == 0) {
     uint8_t pulses_output = pulse_output(&apu->pulses[0]) + pulse_output(&apu->pulses[1]);
-    float sample = apu->pulse_table[pulses_output];
+    uint8_t _triangle_output = triangle_output(&apu->triangle) * 3;
+
+    float sample = apu->pulse_table[pulses_output] + apu->tnd_table[_triangle_output];
     apu->buffer[apu->buffer_index++] = sample;
   }
 
