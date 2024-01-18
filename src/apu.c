@@ -14,6 +14,9 @@ const uint8_t TRIANGLE_TABLE[] = {0xF, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0
                                   0x4, 0x3, 0x2, 0x1, 0x0, 0x0, 0x1, 0x2, 0x3, 0x4, 0x5,
                                   0x6, 0x7, 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
 
+const uint16_t NOISE_PERIOD_TABLE[] = {4,   8,   16,  32,  64,  96,   128,  160,
+                                       202, 254, 380, 508, 762, 1016, 2034, 4068};
+
 uint8_t pulse_output(Pulse *pulse) {
   bool value = DUTY_CYCLE_TABLE[pulse->duty_cycle][pulse->duty_value];
   if (!pulse->enabled || !value ||
@@ -23,7 +26,7 @@ uint8_t pulse_output(Pulse *pulse) {
     return 0;
   }
 
-  // TODO: why period?
+  // envelope period is also used as volume
   return pulse->envelope.enabled ? pulse->envelope.value : pulse->envelope.period;
 }
 
@@ -36,10 +39,21 @@ void pulse_step(Pulse *pulse) {
   }
 }
 
+void pulse_sweep(Pulse *pulse) {
+  uint16_t delta = pulse->timer_period >> pulse->sweep_shift;
+
+  if (pulse->sweep_negate) {
+    pulse->timer_period -= delta;
+    if (pulse->channel == 1) pulse->timer_period--;
+  } else {
+    pulse->timer_period += delta;
+  }
+}
+
 void pulse_sweep_step(Pulse *pulse) {
   if (pulse->sweep_reload) {
     if (pulse->sweep_enabled && pulse->sweep_counter == 0) {
-      // TODO
+      pulse_sweep(pulse);
     }
 
     pulse->sweep_counter = pulse->sweep_period;
@@ -47,16 +61,7 @@ void pulse_sweep_step(Pulse *pulse) {
   } else if (pulse->sweep_counter > 0) {
     pulse->sweep_counter--;
   } else {
-    if (pulse->sweep_enabled) {
-      uint16_t delta = pulse->timer_period >> pulse->sweep_shift;
-
-      if (pulse->sweep_negate) {
-        pulse->timer_period -= delta;
-        if (pulse->channel == 1) pulse->timer_period--;
-      } else {
-        pulse->timer_period += delta;
-      }
-    }
+    if (pulse->sweep_enabled) pulse_sweep(pulse);
 
     pulse->sweep_counter = pulse->sweep_period;
   }
@@ -91,6 +96,25 @@ void triangle_counter_step(Triangle *triangle) {
   if (triangle->linear_counter_enabled) triangle->linear_counter_reload = false;
 }
 
+uint8_t noise_output(Noise *noise) {
+  if (!noise->enabled || noise->length_counter.value == 0 || (noise->shift_register & 1) == 1) {
+    return 0;
+  }
+
+  return noise->envelope.enabled ? noise->envelope.value : noise->envelope.period;
+}
+
+void noise_step(Noise *noise) {
+  if (noise->timer_value == 0) {
+    noise->timer_value = noise->timer_period;
+    uint8_t feedback = noise->shift_register ^ (noise->shift_register >> (noise->mode ? 6 : 1));
+    noise->shift_register >>= 1;
+    noise->shift_register |= (feedback & 0x1) << 14;
+  } else {
+    noise->timer_value--;
+  }
+}
+
 void envelope_step(Envelope *envelope) {
   if (envelope->start) {
     envelope->start = false;
@@ -121,6 +145,7 @@ void length_counter_step(LengthCounter *length_counter) {
 static inline void step_envelopes(APU *apu) {
   envelope_step(&apu->pulses[0].envelope);
   envelope_step(&apu->pulses[1].envelope);
+  envelope_step(&apu->noise.envelope);
   triangle_counter_step(&apu->triangle);
 }
 
@@ -128,6 +153,7 @@ static inline void step_length_and_sweep(APU *apu) {
   length_counter_step(&apu->pulses[0].length_counter);
   length_counter_step(&apu->pulses[1].length_counter);
   length_counter_step(&apu->triangle.length_counter);
+  length_counter_step(&apu->noise.length_counter);
 
   pulse_sweep_step(&apu->pulses[0]);
   pulse_sweep_step(&apu->pulses[1]);
@@ -161,6 +187,8 @@ void apu_init(APU *apu) {
 
   apu->pulses[0].channel = 1;
   apu->pulses[1].channel = 2;
+
+  apu->noise.shift_register = 1;
 }
 
 void apu_write(APU *apu, uint16_t address, uint8_t value) {
@@ -177,9 +205,9 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     break;
   case 0x4001:
   case 0x4005:
-    apu->pulses[channel].sweep_enabled = value & 0x80;
+    apu->pulses[channel].sweep_enabled = (value & 0x80) > 0;
     apu->pulses[channel].sweep_period = ((value >> 4) & 0x07) + 1;
-    apu->pulses[channel].sweep_negate = value & 0x08;
+    apu->pulses[channel].sweep_negate = (value & 0x08) > 0;
     apu->pulses[channel].sweep_shift = value & 0x07;
     apu->pulses[channel].sweep_reload = true;
     break;
@@ -211,6 +239,21 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     apu->triangle.linear_counter_value = apu->triangle.linear_counter_period;
     apu->triangle.linear_counter_reload = true;
     break;
+  case 0x400C:
+    apu->noise.length_counter.enabled = !(value & 0x20);
+    apu->noise.envelope.enabled = !(value & 0x10);
+    apu->noise.envelope.period = value & 0x0F;
+    apu->noise.envelope.loop = (value & 0x20) > 0;
+    apu->noise.envelope.start = true;
+    break;
+  case 0x400E:
+    apu->noise.mode = value & 0x80;
+    apu->noise.timer_period = NOISE_PERIOD_TABLE[value & 0x0F];
+    break;
+  case 0x400F:
+    apu->noise.length_counter.value = LENGTH_COUNTER_TABLE[value >> 3];
+    apu->noise.envelope.start = true;
+    break;
   case 0x4015:
     apu->pulses[0].enabled = value & 0x01;
     if (!apu->pulses[0].enabled) apu->pulses[0].length_counter.value = 0;
@@ -218,6 +261,8 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     if (!apu->pulses[1].enabled) apu->pulses[1].length_counter.value = 0;
     apu->triangle.enabled = value & 0x04;
     if (!apu->triangle.enabled) apu->triangle.length_counter.value = 0;
+    apu->noise.enabled = value & 0x08;
+    if (!apu->noise.enabled) apu->noise.length_counter.value = 0;
     break;
   case 0x4017:
     apu->frame_counter = value;
@@ -233,6 +278,7 @@ void apu_step(APU *apu) {
   if (apu->cycles % 2 == 0) {
     pulse_step(&apu->pulses[0]);
     pulse_step(&apu->pulses[1]);
+    noise_step(&apu->noise);
   }
   triangle_step(&apu->triangle);
 
@@ -264,10 +310,11 @@ void apu_step(APU *apu) {
 
   // downsample
   if (apu->cycles % (APU_RATE / SAMPLE_RATE) / 2 == 0) {
-    uint8_t pulses_output = pulse_output(&apu->pulses[0]) + pulse_output(&apu->pulses[1]);
-    uint8_t _triangle_output = triangle_output(&apu->triangle) * 3;
+    uint8_t p = pulse_output(&apu->pulses[0]) + pulse_output(&apu->pulses[1]);
+    uint8_t t = triangle_output(&apu->triangle);
+    uint8_t n = noise_output(&apu->noise);
 
-    float sample = apu->pulse_table[pulses_output] + apu->tnd_table[_triangle_output];
+    float sample = apu->pulse_table[p] + apu->tnd_table[3 * t + 2 * n];
     apu->buffer[apu->buffer_index++] = sample;
   }
 

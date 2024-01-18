@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-#define SAMPLES 512
+#define SAMPLES 1024
 #define SAMPLE_RATE 44100
 #define APU_RATE 1789773
 
@@ -49,17 +49,31 @@ typedef struct {
 
   bool linear_counter_enabled;
   uint8_t linear_counter_period;
+
   uint16_t timer_period;
+  uint16_t timer_value;
 
   bool linear_counter_reload;
   uint8_t linear_counter_value;
   uint8_t duty_value;
-  uint16_t timer_value;
 } Triangle;
+
+typedef struct {
+  bool enabled;
+
+  Envelope envelope;
+  LengthCounter length_counter;
+
+  bool mode;
+  uint16_t shift_register;
+  uint16_t timer_value;
+  uint16_t timer_period;
+} Noise;
 
 typedef struct {
   Pulse pulses[2];
   Triangle triangle;
+  Noise noise;
 
   float pulse_table[31];
   float tnd_table[203];
