@@ -414,6 +414,15 @@ void mapper_init(Mapper *mapper, uint32_t mapper_id, uint8_t mirror_mode) {
     mapper->prg_offsets[1] = 0x2000;
     mapper->prg_offsets[2] = (mapper->prg_banks * 2 - 2) * 0x2000;
     mapper->prg_offsets[3] = (mapper->prg_banks * 2 - 1) * 0x2000;
+
+    mapper->chr_offsets[0] = 0;
+    mapper->chr_offsets[1] = 0x0400;
+    mapper->chr_offsets[2] = 0;
+    mapper->chr_offsets[3] = 0x0400;
+    mapper->chr_offsets[4] = 0;
+    mapper->chr_offsets[5] = 0;
+    mapper->chr_offsets[6] = 0;
+    mapper->chr_offsets[7] = 0;
   } else if (mapper_id == 0xffffffff) {
     mapper->prg_read = mapper_test_read;
     mapper->prg_write = mapper_test_write;
