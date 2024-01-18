@@ -9,21 +9,38 @@
 
 typedef struct {
   bool enabled;
+  bool loop;
+  bool start;
+  uint8_t period;
+  uint8_t value;
+  uint8_t counter;
+} Envelope;
+
+typedef struct {
+  bool enabled;
+  uint8_t value;
+} LengthCounter;
+
+typedef struct {
+  bool enabled;
 
   uint8_t duty_cycle;
-  /** index into duty cycle table */
-  uint8_t duty;
+  uint8_t duty_value;
 
   uint16_t timer;
   uint16_t timer_period;
 
-  // envelope
-  bool envelope_enabled;
-  bool envelope_loop;
-  bool envelope_start;
-  uint8_t envelope_period;
-  uint8_t envelope_value;
-  uint8_t envelope_counter;
+  Envelope envelope;
+  LengthCounter length_counter;
+
+  bool sweep_reload;
+  bool sweep_enabled;
+  bool sweep_negate;
+  uint8_t sweep_period;
+  uint8_t sweep_counter;
+  uint8_t sweep_shift;
+
+  uint8_t channel;
 } Pulse;
 
 typedef struct {
