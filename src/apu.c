@@ -233,8 +233,8 @@ void apu_step(APU *apu) {
   if (apu->cycles % 2 == 0) {
     pulse_step(&apu->pulses[0]);
     pulse_step(&apu->pulses[1]);
-    triangle_step(&apu->triangle);
   }
+  triangle_step(&apu->triangle);
 
   // clock length counters
   if (apu->cycles % (1789773 / 240) == 0) {
@@ -263,7 +263,7 @@ void apu_step(APU *apu) {
   }
 
   // downsample
-  if (apu->cycles % (APU_RATE / SAMPLE_RATE) == 0) {
+  if (apu->cycles % (APU_RATE / SAMPLE_RATE) / 2 == 0) {
     uint8_t pulses_output = pulse_output(&apu->pulses[0]) + pulse_output(&apu->pulses[1]);
     uint8_t _triangle_output = triangle_output(&apu->triangle) * 3;
 

@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-#define SAMPLES 1024
+#define SAMPLES 512
 #define SAMPLE_RATE 44100
 #define APU_RATE 1789773
 

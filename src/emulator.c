@@ -46,17 +46,20 @@ void emulator_init(Emulator *emulator, char *filename) {
 
 void emulator_step(Emulator *emulator) {
   while (emulator->ppu.frame_complete == false) {
-    ppu_step(&emulator->ppu);
+    int cycles = 0;
 
-    if (emulator->cycles % 3 == 0) {
-      if (emulator->bus.dma_transfer) {
-        bus_dma_transfer(&emulator->bus, emulator->cycles);
-      } else {
-        int cycles = cpu_step(&emulator->cpu);
-        for (int i = 0; i < cycles; i++) {
-          apu_step(&emulator->apu);
-        }
-      }
+    if (emulator->bus.dma_transfer) {
+      bus_dma_transfer(&emulator->bus, emulator->cycles);
+    } else {
+      cycles = cpu_step(&emulator->cpu);
+    }
+
+    for (int i = 0; i < cycles * 3; i++) {
+      ppu_step(&emulator->ppu);
+    }
+
+    for (int i = 0; i < cycles; i++) {
+      apu_step(&emulator->apu);
     }
 
     if (emulator->ppu.nmi) {
