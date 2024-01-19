@@ -17,6 +17,9 @@ const uint8_t TRIANGLE_TABLE[] = {0xF, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0
 const uint16_t NOISE_PERIOD_TABLE[] = {4,   8,   16,  32,  64,  96,   128,  160,
                                        202, 254, 380, 508, 762, 1016, 2034, 4068};
 
+const uint16_t DMC_PERIOD_TABLE[] = {428, 380, 340, 320, 286, 254, 226, 214,
+                                     190, 160, 142, 128, 106, 84,  72,  54};
+
 uint8_t pulse_output(Pulse *pulse) {
   bool value = DUTY_CYCLE_TABLE[pulse->duty_cycle][pulse->duty_value];
   if (!pulse->enabled || !value ||
@@ -115,6 +118,53 @@ void noise_step(Noise *noise) {
   }
 }
 
+void dmc_reader_step(APU *apu) {
+  DMC *dmc = &apu->dmc;
+  if (dmc->current_length > 0 && dmc->bits_remaining == 0) {
+    dmc->stall = true;
+
+    dmc->shift_register = *apu->mapper->prg_read(apu->mapper, dmc->current_address);
+    dmc->bits_remaining = 8;
+
+    if (++dmc->current_address == 0) dmc->current_address = 0x8000;
+
+    dmc->current_length--;
+
+    if (dmc->current_length == 0) {
+      if (dmc->loop) {
+        dmc->current_length = dmc->sample_length;
+        dmc->current_address = dmc->sample_address;
+      } else {
+        dmc->irq_active = true;
+      }
+    }
+  }
+}
+
+void dmc_step(APU *apu) {
+  DMC *dmc = &apu->dmc;
+  if (!dmc->enabled) return;
+
+  dmc_reader_step(apu);
+
+  if (dmc->timer_value == 0) {
+    dmc->timer_value = dmc->timer_period;
+
+    if (dmc->bits_remaining > 0) {
+      if (dmc->shift_register & 1) {
+        if (dmc->value <= 125) dmc->value += 2;
+      } else {
+        if (dmc->value >= 2) dmc->value -= 2;
+      }
+
+      dmc->shift_register >>= 1;
+      dmc->bits_remaining--;
+    }
+  } else {
+    dmc->timer_value--;
+  }
+}
+
 void envelope_step(Envelope *envelope) {
   if (envelope->start) {
     envelope->start = false;
@@ -159,7 +209,9 @@ static inline void step_length_and_sweep(APU *apu) {
   pulse_sweep_step(&apu->pulses[1]);
 }
 
-void apu_init(APU *apu) {
+void apu_init(APU *apu, Mapper *mapper) {
+  apu->mapper = mapper;
+
   SDL_AudioSpec audio_spec;
   audio_spec.freq = 44100;
   audio_spec.format = AUDIO_F32SYS;
@@ -189,6 +241,12 @@ void apu_init(APU *apu) {
   apu->pulses[1].channel = 2;
 
   apu->noise.shift_register = 1;
+
+  apu->frame_step = 0;
+
+  apu->frame_irq_active = false;
+  apu->dmc.irq_active = false;
+  apu->dmc.bits_remaining = 0;
 }
 
 void apu_write(APU *apu, uint16_t address, uint8_t value) {
@@ -254,6 +312,15 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     apu->noise.length_counter.value = LENGTH_COUNTER_TABLE[value >> 3];
     apu->noise.envelope.start = true;
     break;
+  case 0x4010:
+    apu->dmc.irq_enabled = value & 0x80;
+    if (!apu->dmc.irq_enabled) apu->dmc.irq_active = false;
+    apu->dmc.loop = value & 0x40;
+    apu->dmc.timer_period = DMC_PERIOD_TABLE[value & 0x0F];
+    break;
+  case 0x4011: apu->dmc.load_counter = value & 0x7F; break;
+  case 0x4012: apu->dmc.sample_address = 0xC000 | ((uint16_t)value << 6); break;
+  case 0x4013: apu->dmc.sample_length = ((uint16_t)value << 4) | 0x0001; break;
   case 0x4015:
     apu->pulses[0].enabled = value & 0x01;
     if (!apu->pulses[0].enabled) apu->pulses[0].length_counter.value = 0;
@@ -263,12 +330,37 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     if (!apu->triangle.enabled) apu->triangle.length_counter.value = 0;
     apu->noise.enabled = value & 0x08;
     if (!apu->noise.enabled) apu->noise.length_counter.value = 0;
+    apu->dmc.enabled = value & 0x10;
+    if (!apu->dmc.enabled)
+      apu->dmc.current_length = 0;
+    else if (apu->dmc.current_length == 0) {
+      apu->dmc.current_length = apu->dmc.sample_length;
+      apu->dmc.current_address = apu->dmc.sample_address;
+      // TODO: check shift register
+    }
     break;
   case 0x4017:
     apu->frame_counter = value;
-    apu->frame_step = 0;
+    // clear interrupt flag
+    if (apu->frame_counter & 0x40) apu->frame_irq_active = false;
     break;
   }
+}
+
+uint8_t apu_read(APU *apu, uint16_t address) {
+  if (address == 0x4015) {
+    apu->frame_irq_active = false;
+
+    uint8_t value = 0;
+    value |= apu->pulses[0].length_counter.value > 0 ? 0x01 : 0;
+    value |= apu->pulses[1].length_counter.value > 0 ? 0x02 : 0;
+    value |= apu->triangle.length_counter.value > 0 ? 0x04 : 0;
+    value |= apu->noise.length_counter.value > 0 ? 0x08 : 0;
+    value |= apu->dmc.current_length > 0 ? 0x10 : 0;
+    return value;
+  }
+
+  return 0;
 }
 
 void apu_step(APU *apu) {
@@ -279,6 +371,7 @@ void apu_step(APU *apu) {
     pulse_step(&apu->pulses[0]);
     pulse_step(&apu->pulses[1]);
     noise_step(&apu->noise);
+    dmc_step(apu);
   }
   triangle_step(&apu->triangle);
 
@@ -303,6 +396,10 @@ void apu_step(APU *apu) {
       if (apu->frame_step & 0x1) {
         step_length_and_sweep(apu);
       }
+
+      if ((apu->frame_step & 0x3) == 3 && (apu->frame_counter & 0x80) == 0) {
+        apu->frame_irq_active = true;
+      }
     }
 
     apu->frame_step++;
@@ -313,8 +410,9 @@ void apu_step(APU *apu) {
     uint8_t p = pulse_output(&apu->pulses[0]) + pulse_output(&apu->pulses[1]);
     uint8_t t = triangle_output(&apu->triangle);
     uint8_t n = noise_output(&apu->noise);
+    uint8_t d = apu->dmc.value;
 
-    float sample = apu->pulse_table[p] + apu->tnd_table[3 * t + 2 * n];
+    float sample = apu->pulse_table[p] + apu->tnd_table[3 * t + 2 * n + d];
     apu->buffer[apu->buffer_index++] = sample;
   }
 

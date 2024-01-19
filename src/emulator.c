@@ -31,8 +31,7 @@ void emulator_init(Emulator *emulator, char *filename) {
   load_rom(emulator, filename);
 
   // get mapper number
-  uint32_t mapper_id =
-      (emulator->header[7] & 0xF0) | (emulator->header[6] >> 4);
+  uint32_t mapper_id = (emulator->header[7] & 0xF0) | (emulator->header[6] >> 4);
 
   uint8_t mirror_mode = emulator->header[6] & 0x01;
 
@@ -40,7 +39,7 @@ void emulator_init(Emulator *emulator, char *filename) {
   bus_init(&emulator->bus, &emulator->mapper, &emulator->ppu, &emulator->apu,
            emulator->controller);
   cpu_init(&emulator->cpu, &emulator->bus);
-  apu_init(&emulator->apu);
+  apu_init(&emulator->apu, &emulator->mapper);
   ppu_init(&emulator->ppu, &emulator->mapper, mirror_mode);
 }
 
@@ -54,12 +53,28 @@ void emulator_step(Emulator *emulator) {
       cycles = cpu_step(&emulator->cpu);
     }
 
-    for (int i = 0; i < cycles * 3; i++) {
-      ppu_step(&emulator->ppu);
-    }
-
     for (int i = 0; i < cycles; i++) {
       apu_step(&emulator->apu);
+    }
+
+    /* APU Interrupts */
+    /* disabled for now
+      if (emulator->apu.dmc.stall) {
+        cycles += 4;
+      }
+
+      if (emulator->apu.dmc.irq_active) {
+        cpu_irq(&emulator->cpu);
+      }
+
+      if (emulator->apu.frame_irq_active) {
+        emulator->apu.frame_irq_active = false;
+        cpu_irq(&emulator->cpu);
+      }
+    */
+
+    for (int i = 0; i < cycles * 3; i++) {
+      ppu_step(&emulator->ppu);
     }
 
     if (emulator->ppu.nmi) {

@@ -31,7 +31,7 @@ inline uint8_t bus_read(Bus *bus, uint16_t addr, bool read_only) {
   } else if (addr == 0x4014) {
     // oam dma
   } else if (addr == 0x4015) {
-    // apu range
+    return apu_read(bus->apu, addr);
   } else if (addr == 0x4016) {
     // controller 1
     uint8_t data = (bus->controller_state[0] & 0x80) > 0;
