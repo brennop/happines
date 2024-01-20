@@ -138,6 +138,7 @@ void ppu_control_write(PPU *ppu, uint16_t addr, uint8_t data) {
     break;
   case 4: // OAM Data
     ((uint8_t *)ppu->oam)[ppu->oam_addr] = data;
+    ppu->oam_addr++;
     break;
   case 5: // PPU Scroll
     if (ppu->address_latch == 0) {

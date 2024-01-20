@@ -99,9 +99,9 @@ void bus_dma_transfer(Bus *bus, int cycles) {
     if (cycles % 2 == 0) {
       bus->dma_data = bus_read(bus, (bus->dma_page << 8) | bus->dma_addr, false);
     } else {
-      uint8_t *oam = (uint8_t *)bus->ppu->oam;
-      oam[bus->dma_addr] = bus->dma_data;
+      ((uint8_t *)bus->ppu->oam)[bus->ppu->oam_addr] = bus->dma_data;
       bus->dma_addr++;
+      bus->ppu->oam_addr++;
 
       if (bus->dma_addr == 0x00) {
         bus->dma_transfer = false;
