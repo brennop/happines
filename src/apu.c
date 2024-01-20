@@ -343,6 +343,8 @@ void apu_write(APU *apu, uint16_t address, uint8_t value) {
     apu->frame_counter = value;
     // clear interrupt flag
     if (apu->frame_counter & 0x40) apu->frame_irq_active = false;
+    if (value == 0) apu->frame_irq_active = true;
+
     break;
   }
 }
@@ -357,6 +359,8 @@ uint8_t apu_read(APU *apu, uint16_t address) {
     value |= apu->triangle.length_counter.value > 0 ? 0x04 : 0;
     value |= apu->noise.length_counter.value > 0 ? 0x08 : 0;
     value |= apu->dmc.current_length > 0 ? 0x10 : 0;
+    value |= apu->frame_irq_active ? 0x40 : 0;
+    value |= apu->dmc.irq_active ? 0x80 : 0;
     return value;
   }
 
@@ -397,7 +401,7 @@ void apu_step(APU *apu) {
         step_length_and_sweep(apu);
       }
 
-      if ((apu->frame_step & 0x3) == 3 && (apu->frame_counter & 0x80) == 0) {
+      if ((apu->frame_step & 0x3) == 3 && (apu->frame_counter & 0x40) == 0) {
         apu->frame_irq_active = true;
       }
     }
