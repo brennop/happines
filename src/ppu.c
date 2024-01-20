@@ -110,6 +110,9 @@ uint8_t ppu_control_read(PPU *ppu, uint16_t addr, bool readonly) {
     // palette read is not delayed
     if (ppu->vram_addr.reg >= 0x3F00) {
       data = ppu->ppu_data_buffer;
+
+      // TODO: understand why -0x1000, but it passes blargg's vram_access test
+      ppu->ppu_data_buffer = ppu_read(ppu, ppu->vram_addr.reg - 0x1000, readonly);
     }
 
     ppu->vram_addr.reg += ppu->control.increment_mode ? 32 : 1;
